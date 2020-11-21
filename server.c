@@ -18,7 +18,7 @@
   2. start the server (./server -p=9001)
   3. open other terminal
   4. gcc functions.c client.c -o client
-  5. start the client (./client -p=9001)
+  5. start the client (./client -a=127.0.0.1 -p=9001)
   6. enjoy (you can open many terminals - clients and join)
   Note. The program will count how many bytes (symbols) are sent and will display each sent symbol that many times.
   Example.
