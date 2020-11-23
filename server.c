@@ -17,7 +17,7 @@
   1. gcc functions.c server.c -o server
   2. start the server (./server -p=9001)
   3. open other terminal
-  4. gcc functions.c client.c -o client
+  4. gcc functions.c client.c -o client -lncurses
   5. start the client (./client -a=127.0.0.1 -p=9001)
   6. enjoy (you can open many terminals - clients and join)
   Note. The program will count how many bytes (symbols) are sent and will display each sent symbol that many times.
@@ -218,7 +218,7 @@ int process_client(int id, int socket){
       printf("[ERROR] recv failed\n");
       continue;
     } else {
-      printf("Received...\n");
+      printf("Received %s...\n", in);
       send(socket, in, strlen(in)+1, 0);
     }
     /*
