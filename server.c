@@ -205,13 +205,23 @@ int start_network(int port) {
 
 int process_client(int id, int socket){
   int i = 0;
-  char in[1];
+  int in_chars = 1024;
+  char in[in_chars+1];
   char out[1000];
   printf("[OK] Processing client id=%d, socket=%d \n", id, socket);
   printf("[OK] Client count %d\n", *client_count);
 
   int N = 0;
   while (1) {
+    bzero(in, strlen(in));
+    if (recv(socket, in, in_chars, 0) < 0) {
+      printf("[ERROR] recv failed\n");
+      continue;
+    } else {
+      printf("Received...\n");
+      send(socket, in, strlen(in)+1, 0);
+    }
+    /*
       if( recv(socket, in , 1 , 0) < 0) {
         printf("[ERROR] recv failed\n");
         continue;
@@ -233,5 +243,6 @@ int process_client(int id, int socket){
         send(socket,"\n",sizeof(char), 0);
         N = 0;
       }
+      */
   }
 };

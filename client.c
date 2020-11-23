@@ -10,7 +10,14 @@
 #include <sys/mman.h>
 #include "functions.h"
 
+#include <ncurses.h>
+
 int main(int argc, char** argv) {
+  // initscr();
+  // raw();
+  // keypad(stdscr, TRUE);
+  // noecho();
+
   // validate parameters
   if (argc != 3) {
     printf("[Error] Please provide IP and port argument only (ex: -a=123.123.123.123 -p=9001).\n");
@@ -32,10 +39,7 @@ int main(int argc, char** argv) {
     return -1;
   }
 
-  printf("[OK] Client with port %d and IP %s starting...\n", port, ip);
-
-
-  char server_reply[2000];
+  printw("[OK] Client with port %d and IP %s starting...\n", port, ip);
 
   // create socket
   int client_socket;
@@ -54,41 +58,86 @@ int main(int argc, char** argv) {
   // check for error with the connection
   if (connection_status < 0) {
     printf("[ERROR] There was an error with the connection.\n");
+    return -1;
   }
 
-	char message[1000];
+  printf("[OK] Connection successful.\n");
+
+  char message[1000];
 
   int pid = fork();
 
   if (pid == 0) { // child process
+    printf("[OK] Child process started.\n");
+    char server_reply[1024];
     while(1) {
+      // printf("Reading...\n");
       //Receive a reply from the server
-      if( recv(client_socket , server_reply , 1 , 0) < 0) {
-        // printf("recv failed\n");
+      if(recv(client_socket, server_reply, 1024, 0) < 0) {
+        printf("recv failed\n");
+        continue;
       } else {
         // printf(" ");
-        printf("%s", server_reply);
+        printf("%s\n", server_reply);
       }
-
     }
   } else {
-    while (1) {
-      bzero(message, strlen(message));
-      scanf("%s" , message);
-      // printf("Before strl: %d\n", strlen(message));
-      message[strlen(message)] = '\r'; // this is used for server processing
-      message[strlen(message)] = '\0';
-      // printf("After strl: %d\n", strlen(message));
+    printf("[OK] Parent process continuing.\n");
 
-      //Send some data
-      if( send(client_socket , message , strlen(message) , 0) < 0) {
+    // sleep to prevent other notifications showing after next lines (printing prompt to enter username etc).
+    usleep(1500); // 0.015s
+
+    // enter username
+    char username[51];
+    printf("Please enter your username (max 50 chars): ");
+    scanf("%s", username);
+
+    // enter color (HEX)
+    printf("Please enter your color (6 HEX digits): ");
+    char color[7];
+    scanf("%s", color);
+
+    printf("[OK] Entered username: %s and color #%s.\n", username, color);
+
+    if(send(client_socket, username, strlen(username), 0) < 0) {
         printf("Send failed\n");
-        return 1;
-      }
+        return -1;
+    }
+
+    printf("[OK] Username sent to server...\n");
+
+    if(send(client_socket, color, strlen(color) , 0) < 0) {
+        printf("Send failed\n");
+        return -1;
+    }
+
+    printf("[OK] Color sent to server...\n");
+
+
+    while (1) {
+      // char ch = getch();
+      char messagee[1024];
+      scanf("%s", messagee);
+
+      // if (ch == 27) {
+        // printf("SOMETHIN VERY IMPORTANT!\n");
+        // break;
+      // } else {
+          // printf("NOT SOMETHIN VERY IMPORTANT!\n");
+      // }
+
+      // if(send(client_socket, (char *) &ch, sizeof(int), 0) < 0) {
+        // printf("Send failed\n");
+        // return 1;
+      // }
+
+      send(client_socket, messagee, strlen(messagee), 0);
 
       // printf("Send success!\n");
     }
   }
+
+  // endwin();
 
 
   return 0;
