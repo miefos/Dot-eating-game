@@ -12,12 +12,12 @@
 #include "functions.h"
 
 #define MAX_CLIENTS 10
-#define SHARED_MEMORY_SIZE 16384
+#define SHARED_MEMORY_SIZE 2048
 #define BUFFER_SIZE 2048
+// #define PACKET_MAX_SIZE 512
 
 typedef struct {
   int socket;
-  int active;
   int ID;
   char username[256];
   char color[7];
@@ -27,7 +27,10 @@ typedef struct {
 char* shared_memory = NULL;
 int* client_count = NULL;
 int* ID = NULL;
-client_struct* clients;
+client_struct* clients[MAX_CLIENTS]; // creates array of clients with size MAX_CLIENTS
+char* receiving_packet; // 512 bytes
+char* sending_packet; // 512 bytes
+
 int leave_flag = 0;
 
 int get_shared_memory();
@@ -38,13 +41,8 @@ void* process_client(void* arg);
 void send_packet(char *packet); // send packet to all clients
 void broadcast_packet(char *packet, int id); // do not send to specified ID
 void remove_client(int id);
-client_struct* add_client(int client_socket);
+void add_client(client_struct* client);
 
-/**
-======================
-TODO should send end signal to clients when ctrl+c
-======================
-**/
 void set_leave_flag() {
     leave_flag = 1;
 }
@@ -94,13 +92,10 @@ int main(int argc, char **argv){
       printf("[ERROR] error in gameloop().\n");
       return -1;
     };
+    strcpy(sending_packet, "quitfs\0");
+    sleep(3);
     kill(pid, SIGKILL);
     wait(NULL);
-    sleep(1);
-    char quitfsmes[] = "quitfs\0";
-    printf("Sending quitfs\n");
-    send_packet(quitfsmes);
-    sleep(2);
   }
 
 	return 0;
@@ -157,9 +152,22 @@ void* process_client(void* arg){
 	close(client->socket);
   remove_client(client->ID);
   (*client_count)--;
+  free(client);
   pthread_detach(pthread_self());
 
 	return NULL;
+}
+
+void* send_packet_infinite(void* arg) {
+  while (1) {
+    if (strlen(sending_packet) > 0) {
+      send_packet(sending_packet);
+      break;
+    }
+    sleep(1);
+  }
+
+  return NULL;
 }
 
 
@@ -204,7 +212,11 @@ int start_network(int port) {
   }
   printf("[OK] Main socket is listening\n");
 
-  pthread_t tid;
+
+  pthread_t send_message_thread;
+  pthread_create(&send_message_thread, NULL, &send_packet_infinite, NULL);
+
+  pthread_t new_client_threads;
 
   while (1) {
     /* waiting for clients */
@@ -222,9 +234,14 @@ int start_network(int port) {
   		continue;
   	}
 
+  	/* Client settings */
+  	client_struct* client = (client_struct *) malloc(sizeof(client_struct));
+  	client->socket = client_socket;
+  	client->ID = (*ID)++;
+
   	/* Add client and make new thread */
-  	client_struct* new_client = add_client(client_socket);
-  	pthread_create(&tid, NULL, &process_client, (void *) new_client);
+  	add_client(client);
+  	pthread_create(&new_client_threads, NULL, &process_client, (void *) client);
 
   	/* Check for connections only once 1s */
   	sleep(1);
@@ -271,13 +288,17 @@ int get_shared_memory() {
   }
 
   /* Set variables */
-  client_count = (int *) shared_memory;
+  client_count = (int *) (shared_memory);
   (*client_count) = 0;
 
   ID = (int *) (shared_memory + sizeof(int));
   (*ID) = 0;
 
-  clients = (client_struct* ) (shared_memory + sizeof(int) * 2);
+  // printf("Setting sh mem packets\n");
+  receiving_packet = (char *) (shared_memory + sizeof(int)*2); // 512 bytes
+  memset(receiving_packet, '\0', sizeof(char)*512);
+  sending_packet = (char *) (shared_memory + sizeof(int)*2 + sizeof(char)*512); // 512 bytes
+  memset(sending_packet, '\0', sizeof(char)*512);
 
   printf("[OK] Finished shared memory getter.\n");
   return 0;
@@ -297,24 +318,17 @@ Broadcast packet - OK
 pthread_mutex_t lock1 = PTHREAD_MUTEX_INITIALIZER;
 
 /* Add clients */
-client_struct* add_client(int client_socket) {
+void add_client(client_struct* client) {
 	pthread_mutex_lock(&lock1);
 
-  client_struct* client_ptr;
-
 	for(int i=0; i < MAX_CLIENTS; ++i) {
-		if(!(clients[i].active)) {
-      clients[i].socket = client_socket;
-      client_ptr = (clients + i);
-			clients[i].ID = (*ID)++; // assign, then increment
-      clients[i].active = 1;
+		if(!clients[i]) {
+			clients[i] = client;
 			break;
 		}
 	}
 
 	pthread_mutex_unlock(&lock1);
-
-  return client_ptr;
 }
 
 /* Remove clients */
@@ -322,13 +336,9 @@ void remove_client(int id) {
 	pthread_mutex_lock(&lock1);
 
 	for(int i=0; i < MAX_CLIENTS; ++i) {
-		if(clients[i].active) {
-			if(clients[i].ID == id) {
-        clients[i].ID = -1;
-        clients[i].socket = -1;
-        bzero(clients[i].username, strlen(clients[i].username));
-        bzero(clients[i].color, strlen(clients[i].color));
-				clients[i].active = 0;
+		if(clients[i]) {
+			if(clients[i]->ID == id) {
+				clients[i] = NULL;
 				break;
 			}
 		}
@@ -342,13 +352,10 @@ void send_packet(char *packet) {
 	pthread_mutex_lock(&lock1);
 
 	for(int i=0; i < MAX_CLIENTS; ++i) {
-    if(clients[i].active) {
-      if(write(clients[i].socket, packet, strlen(packet)) < 0) {
-        printf("[WARNING] Could not send packet to someone.\n");
-        printf("Failed with Pid=%ld\n", (long) getpid());
-        printf("Socket = %d, i = %d, username %s \n", clients[i].socket, i, clients[i].username);
-        printf("packet = \"%s\" \n", packet);
-        // break;
+    if(clients[i]) {
+      if(write(clients[i]->socket, packet, strlen(packet)) < 0) {
+        printf("[ERROR] Could not send packet to someone.\n");
+        break;
       }
     }
 	}
@@ -361,13 +368,12 @@ void broadcast_packet(char *packet, int id) {
 	pthread_mutex_lock(&lock1);
 
 	for(int i=0; i < MAX_CLIENTS; ++i) {
-		if(clients[i].active) {
-			if (clients[i].ID != id) {
-				if(write(clients[i].socket, packet, strlen(packet)) < 0) {
+		if(clients[i]) {
+			if (clients[i]->ID != id) {
+				if(write(clients[i]->socket, packet, strlen(packet)) < 0) {
 					printf("[ERROR] Could not send packet to someone.\n");
 					break;
 				}
-        printf("Success with Pid=%ld\n", (long) getpid());
 			}
 		}
 	}
