@@ -12,9 +12,7 @@
 #include "functions.h"
 
 #define MAX_CLIENTS 10
-#define SHARED_MEMORY_SIZE 2048
 #define BUFFER_SIZE 2048
-// #define PACKET_MAX_SIZE 512
 
 typedef struct {
   int socket;
@@ -24,17 +22,12 @@ typedef struct {
 } client_struct;
 
 
-char* shared_memory = NULL;
-int* client_count = NULL;
+int client_count = 0;
 int* ID = NULL;
 client_struct* clients[MAX_CLIENTS]; // creates array of clients with size MAX_CLIENTS
-char* receiving_packet; // 512 bytes
-char* sending_packet; // 512 bytes
-
 int leave_flag = 0;
 
-int get_shared_memory();
-int gameloop();
+void* gameloop(void* arg);
 int start_network(int port);
 void* process_client(void* arg);
 
@@ -46,7 +39,6 @@ void add_client(client_struct* client);
 void set_leave_flag() {
     leave_flag = 1;
 }
-
 
 /**
 ======================
@@ -71,32 +63,16 @@ int main(int argc, char **argv){
   printf("[OK] Server starting on port %d.\n", port);
 
   // catch SIGINT (Interruption, e.g., ctrl+c)
-	signal(SIGINT, set_leave_flag);
+	// signal(SIGINT, set_leave_flag);
+  
+  pthread_t gameloop_thread;
 
-	if (get_shared_memory() < 0) {
-	    printf("[ERROR] error in get_shared_memory()\n");
-	    return -1;
-	}
+	pthread_create(&gameloop_thread, NULL, &gameloop, NULL);
 
-  /*
-    fork to have two processes - networking (child here)
-    and game loop (parent here)
-  */
-  int pid = fork();
-  if (pid == 0) { // child
-    if (start_network(port) < 0) {
-      printf("[ERROR] error in start_network().\n");
-    };
-  } else { // parent
-    if (gameloop() < 0) {
-      printf("[ERROR] error in gameloop().\n");
-      return -1;
-    };
-    strcpy(sending_packet, "quitfs\0");
-    sleep(3);
-    kill(pid, SIGKILL);
-    wait(NULL);
-  }
+  if (start_network(port) < 0) {
+    printf("[ERROR] error in start_network().\n");
+  };
+
 
 	return 0;
 }
@@ -109,7 +85,6 @@ void* process_client(void* arg){
 	char username[270];
   int specific_client_leave_flag = 0;
 
-	(*client_count)++;
 	client_struct* client = (client_struct *) arg;
 
 	if(recv(client->socket, username, 270, 0) <= 0){
@@ -151,23 +126,10 @@ void* process_client(void* arg){
 	/* stop client, thread, connection etc*/
 	close(client->socket);
   remove_client(client->ID);
-  (*client_count)--;
   free(client);
   pthread_detach(pthread_self());
 
 	return NULL;
-}
-
-void* send_packet_infinite(void* arg) {
-  while (1) {
-    if (strlen(sending_packet) > 0) {
-      send_packet(sending_packet);
-      break;
-    }
-    sleep(1);
-  }
-
-  return NULL;
 }
 
 
@@ -212,10 +174,6 @@ int start_network(int port) {
   }
   printf("[OK] Main socket is listening\n");
 
-
-  pthread_t send_message_thread;
-  pthread_create(&send_message_thread, NULL, &send_packet_infinite, NULL);
-
   pthread_t new_client_threads;
 
   while (1) {
@@ -228,8 +186,8 @@ int start_network(int port) {
     }
 
   	/* Check if max clients is reached */
-  	if(((*client_count) + 1) == MAX_CLIENTS){
-  		printf("Max clients reached. Further connections will be rejected.\n");
+  	if(client_count + 1 == MAX_CLIENTS){
+  		printf("Max clients reached. Connection rejected.\n");
   		close(client_socket);
   		continue;
   	}
@@ -258,9 +216,10 @@ int start_network(int port) {
 Gameloop - TODO
 ======================
 **/
-int gameloop() {
+void* gameloop(void * arg) {
   printf("[OK] Entered the gameloop.\n");
   while (1) {
+    printf("Gameloop is here...\n");
     if (leave_flag) {
       break;
     }
@@ -268,43 +227,9 @@ int gameloop() {
   }
 
   printf("[OK] Finished the gameloop.\n");
-  return 0;
+
+  return NULL;
 }
-
-
-
-
-/**
-======================
-Shared memory - OK
-======================
-**/
-int get_shared_memory() {
-  printf("[OK] Entered shared memory getter.\n");
-  shared_memory = mmap(NULL, SHARED_MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-  if (shared_memory == MAP_FAILED) {
-    printf("[ERORR] MAP FAILED in get_shared_memory()\n");
-    return -1;
-  }
-
-  /* Set variables */
-  client_count = (int *) (shared_memory);
-  (*client_count) = 0;
-
-  ID = (int *) (shared_memory + sizeof(int));
-  (*ID) = 0;
-
-  // printf("Setting sh mem packets\n");
-  receiving_packet = (char *) (shared_memory + sizeof(int)*2); // 512 bytes
-  memset(receiving_packet, '\0', sizeof(char)*512);
-  sending_packet = (char *) (shared_memory + sizeof(int)*2 + sizeof(char)*512); // 512 bytes
-  memset(sending_packet, '\0', sizeof(char)*512);
-
-  printf("[OK] Finished shared memory getter.\n");
-  return 0;
-}
-
-
 
 /**
 ======================
@@ -328,6 +253,8 @@ void add_client(client_struct* client) {
 		}
 	}
 
+	client_count++;
+
 	pthread_mutex_unlock(&lock1);
 }
 
@@ -343,6 +270,8 @@ void remove_client(int id) {
 			}
 		}
 	}
+
+  client_count--;
 
 	pthread_mutex_unlock(&lock1);
 }
