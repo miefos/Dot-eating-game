@@ -10,23 +10,57 @@
 #include <sys/mman.h>
 #include "functions.h"
 
-#include <ncurses.h>
+#define BUFFER_SIZE 1024
 
-#define SHARED_MEMORY_SIZE 1024
-/**
-  Contents of shared shared_memory
-  1. int gamescreen_on
-     0 - off
-     1 - on
-  2.
-**/
-char* shared_memory = NULL;
-int* gamescreen_on = NULL;
+int leave_flag = 0;
 
-int get_shared_memory();
+void set_leave_flag() {
+    leave_flag = 1;
+}
 
+void remove_newline(char *str) {
+      if (strlen(str) > 0 && str[strlen(str)-1] == '\n')
+      	str[strlen(str)-1] = '\0';
+}
 
-int main(int argc, char** argv) {
+void* send_loop(void* arg) {
+	int* client_socket = (int *) arg;
+  char message[BUFFER_SIZE] = {};
+
+  while(1) {
+    fgets(message, BUFFER_SIZE, stdin);
+    remove_newline(message);
+
+    if (strcmp(message, "quit") == 0) {
+    	set_leave_flag();
+    	return NULL;
+    } else {
+      send(*client_socket, message, strlen(message), 0);
+    }
+
+    bzero(message, BUFFER_SIZE);
+  }
+
+  return NULL;
+}
+
+void* receive_loop(void* arg) {
+  int* client_socket = (int *) arg;
+	char message[BUFFER_SIZE] = {};
+  while (1) {
+    if (recv(*client_socket, message, BUFFER_SIZE, 0) > 0) {
+      printf("%s\n", message);
+    } else { // disconnection or error
+       break;
+    }
+	  bzero(message, BUFFER_SIZE);
+  }
+
+  return NULL;
+}
+
+int main(int argc, char **argv){
+
   // validate parameters
   if (argc != 3) {
     printf("[Error] Please provide IP and port argument only (ex: -a=123.123.123.123 -p=9001).\n");
@@ -43,12 +77,29 @@ int main(int argc, char** argv) {
   char* ip = NULL;
   int result = get_named_argument("a", argc, argv, &ip);
 
-  if (result < 0) {
+  if (result < 0 && ip != NULL) {
     printf("[ERROR] Cannot get IP, errno %d\n", result);
     return -1;
   }
 
-  printf("[OK] Client with port %d and IP %s starting...\n", port, ip);
+  char username[256];
+  char color[7];
+
+	// catch SIGINT (Interruption, e.g., ctrl+c)
+	signal(SIGINT, set_leave_flag);
+
+	printf("Please enter your username: ");
+  fgets(username, 256, stdin);
+  remove_newline(username);
+
+	printf("Please enter your color (6 hex digits): ");
+  fgets(color, 7, stdin);
+  remove_newline(color);
+
+  if (strlen(username) < 1 || strlen(color) < 1) {
+    printf("[ERROR] Username or color is too short. Try again.\n");
+    return -1;
+  }
 
   // create socket
   int client_socket;
@@ -61,8 +112,6 @@ int main(int argc, char** argv) {
   server_address.sin_port = htons(port);
   server_address.sin_addr.s_addr = inet_addr(ip); // ATTENTION !!! inet_addr();
 
-  // printf("ADDR set\n");
-
   int connection_status = connect(client_socket, (struct sockaddr *) &server_address, sizeof(server_address));
   // check for error with the connection
   if (connection_status < 0) {
@@ -70,80 +119,38 @@ int main(int argc, char** argv) {
     return -1;
   }
 
-  printf("[OK] Connection successful.\n");
+	// Send intro
+	char intro_packet[270];
+	sprintf(intro_packet, "%s (#%s)", username, color);
+	send(client_socket, intro_packet, strlen(intro_packet), 0);
 
-  char message[1000];
-
-  // fork
-  if (get_shared_memory() < 0) {
-    printf("[ERROR] error in get_shared_memory()\n");
+	pthread_t send_thread;
+  if(pthread_create(&send_thread, NULL, (void *) send_loop, &client_socket) != 0){
+		printf("[ERROR] thread creating err. \n");
     return -1;
-  }
+	}
+
+	pthread_t receive_thread;
+  if(pthread_create(&receive_thread, NULL, (void *) receive_loop, &client_socket) != 0){
+		printf("ERROR: thread creating err. \n");
+		return -1;
+	}
+
+	while (1){
+	if(leave_flag){
+		printf("The game has ended.\n");
+		break;
+   	 }
+	}
+
+	close(client_socket);
+
+	return 0;
+}
 
 
-  int pid = fork();
 
-  if (pid == 0) { // child process
-    printf("[OK] Child process started.\n");
-    char server_reply[1024];
-    while(1) {
-      // printf("Reading...\n");
-      //Receive a reply from the server
-      if(recv(client_socket, server_reply, 1024, 0) < 0) {
-        printf("recv failed\n");
-        continue;
-      } else {
-        // printf(" ");
-        if (*gamescreen_on == 0) {
-          printf("%s\n", server_reply);
-        }
-      }
-    }
-  } else {
-    printf("[OK] Parent process continuing.\n");
-
-    // sleep to prevent other notifications showing after next lines (printing prompt to enter username etc).
-    usleep(1500); // 0.015s
-
-    // enter username
-    char username[51];
-    printf("Please enter your username (max 50 chars): ");
-    scanf("%s", username);
-
-    // enter color (HEX)
-    printf("Please enter your color (6 HEX digits): ");
-    char color[7];
-    scanf("%s", color);
-
-    printf("[OK] Entered username: %s and color #%s.\n", username, color);
-
-    // TO DO should be 1 packet sent (username + color)...
-
-    if(send(client_socket, username, strlen(username)+1, 0) < 0) {
-        printf("Send failed\n");
-        return -1;
-    }
-
-    printf("[OK] Username sent to server...\n");
-
-    if(send(client_socket, color, strlen(color)+1, 0) < 0) {
-        printf("Send failed\n");
-        return -1;
-    }
-
-    printf("[OK] Color sent to server...\n");
-
-    // TO DO Message from server that everthing is ok...
-
-    sleep(5);
-
-
-    initscr();
-    raw();
-    keypad(stdscr, TRUE);
-    noecho();
-    *gamescreen_on = 1; // should be 1 here! Changed temp.
-
+/*** Get chars...
 
     while (1) {
       char press_str[2];
@@ -187,24 +194,4 @@ int main(int argc, char** argv) {
       }
 
     }
-  }
-
-  endwin();
-
-
-  return 0;
-}
-
-
-
-int get_shared_memory() {
-  printf("[OK] Entered shared memory getter.\n");
-  shared_memory = mmap(NULL, SHARED_MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-  if (shared_memory == MAP_FAILED) {
-    printf("[ERORR] MAP FAILED in get_shared_memory()\n");
-    return -1;
-  }
-  gamescreen_on = (int*) shared_memory;
-  printf("[OK] Finished shared memory getter.\n");
-  return 0;
-}
+    */

@@ -1,47 +1,60 @@
-#include <stdio.h>
-#include <unistd.h>
-#include <stdlib.h>
 #include <sys/socket.h>
-#include <sys/wait.h>
 #include <arpa/inet.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include <errno.h>
 #include <string.h>
+#include <pthread.h>
 #include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include "functions.h"
 
-
 #define MAX_CLIENTS 10
-#define SHARED_MEMORY_SIZE 1024
+#define SHARED_MEMORY_SIZE 2048
+#define BUFFER_SIZE 2048
 
-/*
-  1. gcc functions.c server.c -o server
-  2. start the server (./server -p=9001)
-  3. open other terminal
-  4. gcc functions.c client.c -o client -lncurses
-  5. start the client (./client -a=127.0.0.1 -p=9001)
-  6. enjoy (you can open many terminals - clients and join)
-  Note. The program will count how many bytes (symbols) are sent and will display each sent symbol that many times.
-  Example.
-    server -p=12345
-    client -a=localhost -p=12345
-    > abc
-    abbccc
-    > XY
-    XXXXYYYYY
- */
+typedef struct {
+  int socket;
+  int ID;
+  char username[256];
+  char color[7];
+} client_struct;
+
 
 char* shared_memory = NULL;
 int* client_count = NULL;
-int* shared_data = NULL;
+int* ID = NULL;
+client_struct* clients[MAX_CLIENTS]; // creates array of clients with size MAX_CLIENTS
 
 int get_shared_memory();
 int gameloop();
 int start_network(int port);
-int process_client(int id, int socket);
+void* process_client(void* arg);
+
+void send_packet(char *packet); // send packet to all clients
+void broadcast_packet(char *packet, int id); // do not send to specified ID
+void remove_client(int id);
+void add_client(client_struct* client);
+
+/**
+======================
+TODO should send end signal to clients when ctrl+c
+======================
+**/
+void set_leave_flag() {
+    // leave_flag = 1;
+}
 
 
+/**
+======================
+Main - OK
+======================
+**/
+int main(int argc, char **argv){
 
-int main(int argc, char** argv) {
   // validate parameters
   if (argc != 2) {
     printf("[Error] Please provide port argument only (ex: -p=9001).\n");
@@ -57,27 +70,22 @@ int main(int argc, char** argv) {
 
   printf("[OK] Server starting on port %d.\n", port);
 
+  // catch SIGINT (Interruption, e.g., ctrl+c)
+	signal(SIGINT, set_leave_flag);
 
-  int pid = 0;
-  int i;
-  printf("[OK] Server started!\n");
-  if (get_shared_memory() < 0) {
-    printf("[ERROR] error in get_shared_memory()\n");
-    return -1;
-  }
+	if (get_shared_memory() < 0) {
+	    printf("[ERROR] error in get_shared_memory()\n");
+	    return -1;
+	}
+
   /*
     fork to have two processes - networking (child here)
     and game loop (parent here)
   */
-  pid = fork();
+  int pid = fork();
   if (pid == 0) { // child
-    if (start_network(port) < 0) { // try twice
+    if (start_network(port) < 0) {
       printf("[ERROR] error in start_network().\n");
-      printf("Retrying start_network().\n");
-      if (start_network(port) < 0) {
-        printf("[ERROR] error retrying in start_network().\n");
-        return -1;
-      };
     };
   } else { // parent
     if (gameloop() < 0) {
@@ -86,48 +94,72 @@ int main(int argc, char** argv) {
     };
   }
 
-
-  return 0;
+	return 0;
 }
 
 
 
+/* This function should be used when creating new threads for new clients... */
+void* process_client(void* arg){
+	char buffer[BUFFER_SIZE];
+	char username[270];
+	int leave_flag = 0;
 
+	(*client_count)++;
+	client_struct* client = (client_struct *) arg;
 
+	if(recv(client->socket, username, 270, 0) <= 0 || strlen(username) <  1 || strlen(username) > 270){
+		printf("[ERROR] Cannot get username.\n");
+		leave_flag = 1;
+	} else {
+		strcpy(client->username, username);
+		sprintf(buffer, "%s joined\n", client->username);
+		printf("%s", buffer);
+		broadcast_packet(buffer, client->ID);
+	}
 
+	bzero(buffer, BUFFER_SIZE);
 
+	while(1){
+		if (leave_flag) {
+			break;
+		}
 
-int get_shared_memory() {
-  printf("[OK] Entered shared memory getter.\n");
-  shared_memory = mmap(NULL, SHARED_MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-  if (shared_memory == MAP_FAILED) {
-    printf("[ERORR] MAP FAILED in get_shared_memory()\n");
-    return -1;
-  }
-  client_count = (int*) shared_memory;
-  /* map an array like this shared_data[MAX_CLIENTS*2], incoming data first, results after */
-  shared_data = (int*) (shared_memory + sizeof(int));
-  printf("[OK] Finished shared memory getter.\n");
-  return 0;
+		int receive = recv(client->socket, buffer, BUFFER_SIZE, 0);
+		if (receive > 0){
+			if(strlen(buffer) > 0){
+				broadcast_packet(buffer, client->ID);
+				printf("%s [from %s]\n", buffer, client->username);
+			}
+		} else if (receive == 0 || strcmp(buffer, "quit") == 0){
+			sprintf(buffer, "%s left\n", client->username);
+			printf("%s", buffer);
+			broadcast_packet(buffer, client->ID);
+			leave_flag = 1;
+		} else {
+			printf("[ERROR] recv failed \n");
+			leave_flag = 1;
+		}
+
+		bzero(buffer, BUFFER_SIZE);
+	}
+
+	/* stop client, thread, connection etc*/
+	close(client->socket);
+  remove_client(client->ID);
+  (*client_count)--;
+  free(client);
+  pthread_detach(pthread_self());
+
+	return NULL;
 }
 
 
-int gameloop() {
-  int i = 0;
-  printf("[OK] Entered the gameloop.\n");
-  while (1) {
-    for (i = 0; i < *client_count; i++) {
-      shared_data[MAX_CLIENTS+i] += shared_data[i];
-      shared_data[i] = 0;
-    }
-    sleep(0.1);
-  }
-
-  printf("[OK] Finished the gameloop.\n");
-  return 0;
-}
-
-
+/**
+======================
+Start network - OK
+======================
+**/
 int start_network(int port) {
   printf("[OK] Entered the start network.\n");
 
@@ -135,7 +167,7 @@ int start_network(int port) {
   struct sockaddr_in server_address;
   int client_socket;
   struct sockaddr_in client_address;
-  int client_address_size = sizeof(client_address);
+  unsigned int client_address_size = sizeof(client_address);
 
   main_socket = socket(AF_INET, SOCK_STREAM, 0);
   if (main_socket < 0) {
@@ -148,6 +180,7 @@ int start_network(int port) {
   server_address.sin_family = AF_INET;
   server_address.sin_addr.s_addr = INADDR_ANY;
   server_address.sin_port = htons(port);
+
 
   if (bind(main_socket, (struct sockaddr*) &server_address, sizeof(server_address)) < 0) {
     printf("[ERROR] Cannot bind the main server socket.\n");
@@ -163,9 +196,10 @@ int start_network(int port) {
   }
   printf("[OK] Main socket is listening\n");
 
-  while (1) {
-      int new_client_id = 0;
-      int cpid = 0;
+  pthread_t tid;
+
+    while (1) {
+
       /* waiting for clients */
       client_socket = accept(main_socket, (struct sockaddr*) &client_address, &client_address_size);
       if (client_socket < 0) {
@@ -174,75 +208,145 @@ int start_network(int port) {
           continue;
       }
 
-      new_client_id = *client_count;
-      *client_count += 1;
-      cpid = fork();
+	/* Check if max clients is reached */
+	if(((*client_count) + 1) == MAX_CLIENTS){
+		printf("Max clients reached. Further connections will be rejected.\n");
+		close(client_socket);
+		continue;
+	}
 
-      if (cpid == 0) {
-        /* start child connection processing */
-        close(main_socket);
-        cpid = fork();
-        if (cpid == 0) {
-          if (process_client(new_client_id, client_socket) < 0) {
-            printf("[ERROR] error in process_client. (errcode = %d)\n", 2220);
-          };
-          exit(0);
-        } else {
-          /* orphaning */
-          wait(NULL);
-          printf("[OK] Successfully orphaned client %d\n", new_client_id);
-          exit(0);
-        }
-      } else {
-        close(client_socket);
-      }
+	/* Client settings */
+	client_struct* client = (client_struct *) malloc(sizeof(client_struct));
+	client->socket = client_socket;
+	client->ID = (*ID)++;
+
+	/* Add client and make new thread */
+	add_client(client);
+	pthread_create(&tid, NULL, &process_client, (void *) client);
+
+	/* Check for connections only once 1s */
+	sleep(1);
+     }
+
+
+}
+
+/**
+======================
+Gameloop - TODO
+======================
+**/
+int gameloop() {
+  printf("[OK] Entered the gameloop.\n");
+  while (1) {
+   sleep(5);
   }
 
-  printf("[OK] Finished the start network.\n");
+  printf("[OK] Finished the gameloop.\n");
   return 0;
 }
 
 
-int process_client(int id, int socket){
-  int i = 0;
-  int in_chars = 1024;
-  char in[in_chars+1];
-  char out[1000];
-  printf("[OK] Processing client id=%d, socket=%d \n", id, socket);
-  printf("[OK] Client count %d\n", *client_count);
 
-  int N = 0;
-  while (1) {
-    bzero(in, strlen(in));
-    if (recv(socket, in, in_chars, 0) < 0) {
-      printf("[ERROR] recv failed\n");
-      continue;
-    } else {
-      printf("Received %s...\n", in);
-      send(socket, in, strlen(in)+1, 0);
-    }
-    /*
-      if( recv(socket, in , 1 , 0) < 0) {
-        printf("[ERROR] recv failed\n");
-        continue;
-      }
-      if (in[0] != '\n' && in[0] != '\r' && in[0] > 0) {
-        int k = 0;
-        while (k < shared_data[MAX_CLIENTS+id]+N+1) {
-          out[k] = in[0];
-          k++;
-        }
-        out[k] = '\0';
-        // char server_message[] = "Hello there. IAM SERVEVR!\n";
-        send(socket, out, strlen(out), 0);
-        // write(socket,out,strlen(out));
-        // printf("[OK] Client %d sent %c\n", id, in[0]);
-        shared_data[id] = N+1;
-        N++;
-      } else if (in[0] == '\r'){ // carriage return (finished string)
-        send(socket,"\n",sizeof(char), 0);
-        N = 0;
-      }
-      */
+
+/**
+======================
+Shared memory - OK
+======================
+**/
+int get_shared_memory() {
+  printf("[OK] Entered shared memory getter.\n");
+  shared_memory = mmap(NULL, SHARED_MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+  if (shared_memory == MAP_FAILED) {
+    printf("[ERORR] MAP FAILED in get_shared_memory()\n");
+    return -1;
   }
-};
+
+  /* Set variables */
+  client_count = (int *) shared_memory;
+  (*client_count) = 0;
+
+  ID = (int *) (shared_memory + sizeof(int));
+  (*ID) = 0;
+
+
+  printf("[OK] Finished shared memory getter.\n");
+  return 0;
+}
+
+
+
+/**
+======================
+Add clients - OK
+Remove clients - OK
+Send packet - OK
+Broadcast packet - OK
+======================
+**/
+
+pthread_mutex_t lock1 = PTHREAD_MUTEX_INITIALIZER;
+
+/* Add clients */
+void add_client(client_struct* client) {
+	pthread_mutex_lock(&lock1);
+
+	for(int i=0; i < MAX_CLIENTS; ++i) {
+		if(!clients[i]) {
+			clients[i] = client;
+			break;
+		}
+	}
+
+	pthread_mutex_unlock(&lock1);
+}
+
+/* Remove clients */
+void remove_client(int id) {
+	pthread_mutex_lock(&lock1);
+
+	for(int i=0; i < MAX_CLIENTS; ++i) {
+		if(clients[i]) {
+			if(clients[i]->ID == id) {
+				clients[i] = NULL;
+				break;
+			}
+		}
+	}
+
+	pthread_mutex_unlock(&lock1);
+}
+
+/* Send a packet to all clients */
+void send_packet(char *packet) {
+	pthread_mutex_lock(&lock1);
+
+	for(int i=0; i < MAX_CLIENTS; ++i) {
+		if(clients[i]) {
+				if(write(clients[i]->socket, packet, strlen(packet)) < 0) {
+					printf("[ERROR] Could not send packet to someone.\n");
+					break;
+				}
+			}
+	}
+
+	pthread_mutex_unlock(&lock1);
+}
+
+
+void broadcast_packet(char *packet, int id) {
+	pthread_mutex_lock(&lock1);
+
+	for(int i=0; i < MAX_CLIENTS; ++i) {
+		if(clients[i]) {
+			if (clients[i]->ID != id) {
+				if(write(clients[i]->socket, packet, strlen(packet)) < 0) {
+					printf("[ERROR] Could not send packet to someone.\n");
+					break;
+				}
+			}
+		}
+	}
+
+	pthread_mutex_unlock(&lock1);
+}

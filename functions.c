@@ -47,8 +47,8 @@ int get_named_argument(char* key, int argc, char **argv, char** result) {
     if ((strlen(argv[i]) < strlen(key)+3) || strlen(argv[i]) - strlen(key) - 2 < 1) {
       return -3; // not found
     }
-    
-    
+
+
     //printf("HAPPY3! %d, %s, j=%d\n", i, argv[i], j);
 
     //return 0;
@@ -74,11 +74,11 @@ int get_port(char* key, int argc, char** argv) {
   char* port_c = NULL;
   int result = get_named_argument(key, argc, argv, &port_c);
   int i = 0;
-  
+
   if (result < 0) {
     return -1; // err
   }
-  
+
   while(port_c[i]) {
     /* printf("Currently checking %c\n", port_c[i]); */
     if (port_c[i] < 48 || port_c[i] > 57) {
@@ -88,6 +88,9 @@ int get_port(char* key, int argc, char** argv) {
     i++;
   }
 
-  return atoi(port_c);
+  int port = atoi(port_c);
+  free(port_c);
+
+  return port;
 
 }
