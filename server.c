@@ -12,11 +12,12 @@
 #include "functions.h"
 
 #define MAX_CLIENTS 10
-#define SHARED_MEMORY_SIZE 2048
+#define SHARED_MEMORY_SIZE 16384
 #define BUFFER_SIZE 2048
 
 typedef struct {
   int socket;
+  int active;
   int ID;
   char username[256];
   char color[7];
@@ -26,8 +27,8 @@ typedef struct {
 char* shared_memory = NULL;
 int* client_count = NULL;
 int* ID = NULL;
-client_struct* clients[MAX_CLIENTS]; // creates array of clients with size MAX_CLIENTS
-int* leave_flag = NULL;
+client_struct* clients;
+int leave_flag = 0;
 
 int get_shared_memory();
 int gameloop();
@@ -37,7 +38,7 @@ void* process_client(void* arg);
 void send_packet(char *packet); // send packet to all clients
 void broadcast_packet(char *packet, int id); // do not send to specified ID
 void remove_client(int id);
-void add_client(client_struct* client);
+client_struct* add_client(int client_socket);
 
 /**
 ======================
@@ -45,7 +46,7 @@ TODO should send end signal to clients when ctrl+c
 ======================
 **/
 void set_leave_flag() {
-    (*leave_flag) = 1;
+    leave_flag = 1;
 }
 
 
@@ -93,9 +94,13 @@ int main(int argc, char **argv){
       printf("[ERROR] error in gameloop().\n");
       return -1;
     };
-    // sleep(1);
     kill(pid, SIGKILL);
     wait(NULL);
+    sleep(1);
+    char quitfsmes[] = "quitfs\0";
+    printf("Sending quitfs\n");
+    send_packet(quitfsmes);
+    sleep(2);
   }
 
 	return 0;
@@ -121,11 +126,6 @@ void* process_client(void* arg){
     fflush(stdout);
 		printf("%s", buffer);
 		broadcast_packet(buffer, client->ID);
-
-    // 5s after first connection quit all clients
-    // sleep(5);
-    // printf("Sending quitfs\n");
-    // send_packet("quitfs");
 	}
 
 	bzero(buffer, BUFFER_SIZE);
@@ -157,7 +157,6 @@ void* process_client(void* arg){
 	close(client->socket);
   remove_client(client->ID);
   (*client_count)--;
-  free(client);
   pthread_detach(pthread_self());
 
 	return NULL;
@@ -223,14 +222,9 @@ int start_network(int port) {
   		continue;
   	}
 
-  	/* Client settings */
-  	client_struct* client = (client_struct *) malloc(sizeof(client_struct));
-  	client->socket = client_socket;
-  	client->ID = (*ID)++;
-
   	/* Add client and make new thread */
-  	add_client(client);
-  	pthread_create(&tid, NULL, &process_client, (void *) client);
+  	client_struct* new_client = add_client(client_socket);
+  	pthread_create(&tid, NULL, &process_client, (void *) new_client);
 
   	/* Check for connections only once 1s */
   	sleep(1);
@@ -250,7 +244,7 @@ Gameloop - TODO
 int gameloop() {
   printf("[OK] Entered the gameloop.\n");
   while (1) {
-    if (*leave_flag) {
+    if (leave_flag) {
       break;
     }
     sleep(5);
@@ -283,9 +277,7 @@ int get_shared_memory() {
   ID = (int *) (shared_memory + sizeof(int));
   (*ID) = 0;
 
-  leave_flag = (int *) (shared_memory + sizeof(int)*2);
-  (*leave_flag) = 0;
-
+  clients = (client_struct* ) (shared_memory + sizeof(int) * 2);
 
   printf("[OK] Finished shared memory getter.\n");
   return 0;
@@ -305,17 +297,24 @@ Broadcast packet - OK
 pthread_mutex_t lock1 = PTHREAD_MUTEX_INITIALIZER;
 
 /* Add clients */
-void add_client(client_struct* client) {
+client_struct* add_client(int client_socket) {
 	pthread_mutex_lock(&lock1);
 
+  client_struct* client_ptr;
+
 	for(int i=0; i < MAX_CLIENTS; ++i) {
-		if(!clients[i]) {
-			clients[i] = client;
+		if(!(clients[i].active)) {
+      clients[i].socket = client_socket;
+      client_ptr = (clients + i);
+			clients[i].ID = (*ID)++; // assign, then increment
+      clients[i].active = 1;
 			break;
 		}
 	}
 
 	pthread_mutex_unlock(&lock1);
+
+  return client_ptr;
 }
 
 /* Remove clients */
@@ -323,9 +322,13 @@ void remove_client(int id) {
 	pthread_mutex_lock(&lock1);
 
 	for(int i=0; i < MAX_CLIENTS; ++i) {
-		if(clients[i]) {
-			if(clients[i]->ID == id) {
-				clients[i] = NULL;
+		if(clients[i].active) {
+			if(clients[i].ID == id) {
+        clients[i].ID = -1;
+        clients[i].socket = -1;
+        bzero(clients[i].username, strlen(clients[i].username));
+        bzero(clients[i].color, strlen(clients[i].color));
+				clients[i].active = 0;
 				break;
 			}
 		}
@@ -338,17 +341,15 @@ void remove_client(int id) {
 void send_packet(char *packet) {
 	pthread_mutex_lock(&lock1);
 
-  printf("Start sending...\n");
-
 	for(int i=0; i < MAX_CLIENTS; ++i) {
-    printf("i = %d\n", i);
-    if(clients[i]) {
-      printf("Sending...\n");
-      if(write(clients[i]->socket, packet, strlen(packet)) < 0) {
-        printf("[ERROR] Could not send packet to someone.\n");
-        break;
+    if(clients[i].active) {
+      if(write(clients[i].socket, packet, strlen(packet)) < 0) {
+        printf("[WARNING] Could not send packet to someone.\n");
+        printf("Failed with Pid=%ld\n", (long) getpid());
+        printf("Socket = %d, i = %d, username %s \n", clients[i].socket, i, clients[i].username);
+        printf("packet = \"%s\" \n", packet);
+        // break;
       }
-      printf("Sent completed...\n");
     }
 	}
 
@@ -360,12 +361,13 @@ void broadcast_packet(char *packet, int id) {
 	pthread_mutex_lock(&lock1);
 
 	for(int i=0; i < MAX_CLIENTS; ++i) {
-		if(clients[i]) {
-			if (clients[i]->ID != id) {
-				if(write(clients[i]->socket, packet, strlen(packet)) < 0) {
+		if(clients[i].active) {
+			if (clients[i].ID != id) {
+				if(write(clients[i].socket, packet, strlen(packet)) < 0) {
 					printf("[ERROR] Could not send packet to someone.\n");
 					break;
 				}
+        printf("Success with Pid=%ld\n", (long) getpid());
 			}
 		}
 	}
