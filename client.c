@@ -29,6 +29,7 @@ void* send_loop(void* arg) {
 
   while(1) {
     fgets(message, BUFFER_SIZE, stdin);
+    setbuf(stdin, NULL); // clears overflow
     remove_newline(message);
 
     if (strcmp(message, "quit") == 0) {
@@ -49,6 +50,11 @@ void* receive_loop(void* arg) {
 	char message[BUFFER_SIZE] = {};
   while (1) {
     if (recv(*client_socket, message, BUFFER_SIZE, 0) > 0) {
+      if (strcmp(message, "quitfs") == 0) { // quit from server
+        printf("Received quitfs\n");
+        set_leave_flag();
+        return NULL;
+      }
       printf("%s\n", message);
     } else { // disconnection or error
        break;
@@ -91,10 +97,12 @@ int main(int argc, char **argv){
 	printf("Please enter your username: ");
   fgets(username, 256, stdin);
   remove_newline(username);
+  setbuf(stdin, NULL); // clears overflow
 
 	printf("Please enter your color (6 hex digits): ");
   fgets(color, 7, stdin);
   remove_newline(color);
+  setbuf(stdin, NULL); // clears overflow
 
   if (strlen(username) < 1 || strlen(color) < 1) {
     printf("[ERROR] Username or color is too short. Try again.\n");
@@ -124,6 +132,8 @@ int main(int argc, char **argv){
 	sprintf(intro_packet, "%s (#%s)", username, color);
 	send(client_socket, intro_packet, strlen(intro_packet), 0);
 
+  printf("Sending intro packet: %s\n", intro_packet);
+
 	pthread_t send_thread;
   if(pthread_create(&send_thread, NULL, (void *) send_loop, &client_socket) != 0){
 		printf("[ERROR] thread creating err. \n");
@@ -137,10 +147,11 @@ int main(int argc, char **argv){
 	}
 
 	while (1){
-	if(leave_flag){
-		printf("The game has ended.\n");
-		break;
-   	 }
+    if(leave_flag){
+      printf("The game has ended.\n");
+      break;
+    }
+    sleep(1);
 	}
 
 	close(client_socket);
@@ -195,3 +206,14 @@ int main(int argc, char **argv){
 
     }
     */
+
+
+
+
+
+    /***
+
+Problem - client was resource intensive (took ~100% CPU). Added sleep in main while loop.
+
+
+    **/

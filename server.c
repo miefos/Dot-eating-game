@@ -27,6 +27,7 @@ char* shared_memory = NULL;
 int* client_count = NULL;
 int* ID = NULL;
 client_struct* clients[MAX_CLIENTS]; // creates array of clients with size MAX_CLIENTS
+int* leave_flag = NULL;
 
 int get_shared_memory();
 int gameloop();
@@ -44,7 +45,7 @@ TODO should send end signal to clients when ctrl+c
 ======================
 **/
 void set_leave_flag() {
-    // leave_flag = 1;
+    (*leave_flag) = 1;
 }
 
 
@@ -92,6 +93,9 @@ int main(int argc, char **argv){
       printf("[ERROR] error in gameloop().\n");
       return -1;
     };
+    // sleep(1);
+    kill(pid, SIGKILL);
+    wait(NULL);
   }
 
 	return 0;
@@ -103,27 +107,32 @@ int main(int argc, char **argv){
 void* process_client(void* arg){
 	char buffer[BUFFER_SIZE];
 	char username[270];
-	int leave_flag = 0;
+  int specific_client_leave_flag = 0;
 
 	(*client_count)++;
 	client_struct* client = (client_struct *) arg;
 
-	if(recv(client->socket, username, 270, 0) <= 0 || strlen(username) <  1 || strlen(username) > 270){
-		printf("[ERROR] Cannot get username.\n");
-		leave_flag = 1;
+	if(recv(client->socket, username, 270, 0) <= 0){
+		printf("[ERROR] Cannot get intro packet [packet 0].\n");
+		specific_client_leave_flag = 1;
 	} else {
 		strcpy(client->username, username);
 		sprintf(buffer, "%s joined\n", client->username);
+    fflush(stdout);
 		printf("%s", buffer);
 		broadcast_packet(buffer, client->ID);
+
+    // 5s after first connection quit all clients
+    // sleep(5);
+    // printf("Sending quitfs\n");
+    // send_packet("quitfs");
 	}
 
 	bzero(buffer, BUFFER_SIZE);
 
 	while(1){
-		if (leave_flag) {
-			break;
-		}
+    if (specific_client_leave_flag)
+      break;
 
 		int receive = recv(client->socket, buffer, BUFFER_SIZE, 0);
 		if (receive > 0){
@@ -135,10 +144,10 @@ void* process_client(void* arg){
 			sprintf(buffer, "%s left\n", client->username);
 			printf("%s", buffer);
 			broadcast_packet(buffer, client->ID);
-			leave_flag = 1;
+      specific_client_leave_flag = 1;
 		} else {
 			printf("[ERROR] recv failed \n");
-			leave_flag = 1;
+			specific_client_leave_flag = 1;
 		}
 
 		bzero(buffer, BUFFER_SIZE);
@@ -198,36 +207,38 @@ int start_network(int port) {
 
   pthread_t tid;
 
-    while (1) {
+  while (1) {
+    /* waiting for clients */
+    client_socket = accept(main_socket, (struct sockaddr*) &client_address, &client_address_size);
+    if (client_socket < 0) {
+        /* if client connection fails, we can still accept other connections*/
+        printf("[WARNING] Error accepting client.\n");
+        continue;
+    }
 
-      /* waiting for clients */
-      client_socket = accept(main_socket, (struct sockaddr*) &client_address, &client_address_size);
-      if (client_socket < 0) {
-          /* if client connection fails, we can still accept other connections*/
-          printf("[WARNING] Error accepting client.\n");
-          continue;
-      }
+  	/* Check if max clients is reached */
+  	if(((*client_count) + 1) == MAX_CLIENTS){
+  		printf("Max clients reached. Further connections will be rejected.\n");
+  		close(client_socket);
+  		continue;
+  	}
 
-	/* Check if max clients is reached */
-	if(((*client_count) + 1) == MAX_CLIENTS){
-		printf("Max clients reached. Further connections will be rejected.\n");
-		close(client_socket);
-		continue;
-	}
+  	/* Client settings */
+  	client_struct* client = (client_struct *) malloc(sizeof(client_struct));
+  	client->socket = client_socket;
+  	client->ID = (*ID)++;
 
-	/* Client settings */
-	client_struct* client = (client_struct *) malloc(sizeof(client_struct));
-	client->socket = client_socket;
-	client->ID = (*ID)++;
+  	/* Add client and make new thread */
+  	add_client(client);
+  	pthread_create(&tid, NULL, &process_client, (void *) client);
 
-	/* Add client and make new thread */
-	add_client(client);
-	pthread_create(&tid, NULL, &process_client, (void *) client);
+  	/* Check for connections only once 1s */
+  	sleep(1);
+  }
 
-	/* Check for connections only once 1s */
-	sleep(1);
-     }
+  printf("[OK] Finished the start network.\n");
 
+  return 0;
 
 }
 
@@ -239,7 +250,10 @@ Gameloop - TODO
 int gameloop() {
   printf("[OK] Entered the gameloop.\n");
   while (1) {
-   sleep(5);
+    if (*leave_flag) {
+      break;
+    }
+    sleep(5);
   }
 
   printf("[OK] Finished the gameloop.\n");
@@ -268,6 +282,9 @@ int get_shared_memory() {
 
   ID = (int *) (shared_memory + sizeof(int));
   (*ID) = 0;
+
+  leave_flag = (int *) (shared_memory + sizeof(int)*2);
+  (*leave_flag) = 0;
 
 
   printf("[OK] Finished shared memory getter.\n");
@@ -321,13 +338,18 @@ void remove_client(int id) {
 void send_packet(char *packet) {
 	pthread_mutex_lock(&lock1);
 
+  printf("Start sending...\n");
+
 	for(int i=0; i < MAX_CLIENTS; ++i) {
-		if(clients[i]) {
-				if(write(clients[i]->socket, packet, strlen(packet)) < 0) {
-					printf("[ERROR] Could not send packet to someone.\n");
-					break;
-				}
-			}
+    printf("i = %d\n", i);
+    if(clients[i]) {
+      printf("Sending...\n");
+      if(write(clients[i]->socket, packet, strlen(packet)) < 0) {
+        printf("[ERROR] Could not send packet to someone.\n");
+        break;
+      }
+      printf("Sent completed...\n");
+    }
 	}
 
 	pthread_mutex_unlock(&lock1);
