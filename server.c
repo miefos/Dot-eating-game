@@ -23,12 +23,12 @@ typedef struct {
 
 
 int client_count = 0;
-int* ID = NULL;
+int ID = 0;
 client_struct* clients[MAX_CLIENTS]; // creates array of clients with size MAX_CLIENTS
 int leave_flag = 0;
 
-void* gameloop(void* arg);
-int start_network(int port);
+int gameloop();
+void* start_network(void* arg);
 void* process_client(void* arg);
 
 void send_packet(char *packet); // send packet to all clients
@@ -47,32 +47,17 @@ Main - OK
 **/
 int main(int argc, char **argv){
 
-  // validate parameters
-  if (argc != 2) {
-    printf("[Error] Please provide port argument only (ex: -p=9001).\n");
-    return -1;
-  }
-
-  int port = get_port("p", argc, argv);
-
-  if (port < 0) {
-    printf("[ERROR] Cannot get port number, %d\n", port);
-    return -1;
-  }
-
-  printf("[OK] Server starting on port %d.\n", port);
-
   // catch SIGINT (Interruption, e.g., ctrl+c)
-	// signal(SIGINT, set_leave_flag);
-  
-  pthread_t gameloop_thread;
+	signal(SIGINT, set_leave_flag);
 
-	pthread_create(&gameloop_thread, NULL, &gameloop, NULL);
+  // server setup
+  int port; if (server_setup(argc, argv, &port) < 0) return -1;
 
-  if (start_network(port) < 0) {
-    printf("[ERROR] error in start_network().\n");
-  };
+  // networking_thread
+  pthread_t networking_thread; pthread_create(&networking_thread, NULL, &start_network, &port);
 
+  // start network
+  if (gameloop() < 0) printf("[ERROR] error in gameloop().\n");
 
 	return 0;
 }
@@ -83,13 +68,13 @@ int main(int argc, char **argv){
 void* process_client(void* arg){
 	char buffer[BUFFER_SIZE];
 	char username[270];
-  int specific_client_leave_flag = 0;
+  int client_leave_flag = 0;
 
 	client_struct* client = (client_struct *) arg;
 
 	if(recv(client->socket, username, 270, 0) <= 0){
 		printf("[ERROR] Cannot get intro packet [packet 0].\n");
-		specific_client_leave_flag = 1;
+		client_leave_flag = 1;
 	} else {
 		strcpy(client->username, username);
 		sprintf(buffer, "%s joined\n", client->username);
@@ -101,23 +86,19 @@ void* process_client(void* arg){
 	bzero(buffer, BUFFER_SIZE);
 
 	while(1){
-    if (specific_client_leave_flag)
-      break;
+    if (client_leave_flag) break;
 
-		int receive = recv(client->socket, buffer, BUFFER_SIZE, 0);
-		if (receive > 0){
+    int receive = recv(client->socket, buffer, BUFFER_SIZE, 0) > 0;
+		if (receive > 0){ // received packet
 			if(strlen(buffer) > 0){
 				broadcast_packet(buffer, client->ID);
 				printf("%s [from %s]\n", buffer, client->username);
 			}
-		} else if (receive == 0 || strcmp(buffer, "quit") == 0){
+		} else if (receive < 0 || strcmp(buffer, "quit") == 0){ // disconnection or error
 			sprintf(buffer, "%s left\n", client->username);
 			printf("%s", buffer);
 			broadcast_packet(buffer, client->ID);
-      specific_client_leave_flag = 1;
-		} else {
-			printf("[ERROR] recv failed \n");
-			specific_client_leave_flag = 1;
+      client_leave_flag = 1;
 		}
 
 		bzero(buffer, BUFFER_SIZE);
@@ -138,8 +119,9 @@ void* process_client(void* arg){
 Start network - OK
 ======================
 **/
-int start_network(int port) {
-  printf("[OK] Entered the start network.\n");
+void* start_network(void* arg) {
+  int* port = (int *) arg;
+  printf("[OK] Entered the start network with port %d.\n", *port);
 
   int main_socket;
   struct sockaddr_in server_address;
@@ -151,26 +133,25 @@ int start_network(int port) {
   if (main_socket < 0) {
     printf("[ERROR] Cannot open main socket.\n");
     close(main_socket);
-    return -1;
+    exit(-1);
   }
   printf("[OK] Main socket created.\n");
 
   server_address.sin_family = AF_INET;
   server_address.sin_addr.s_addr = INADDR_ANY;
-  server_address.sin_port = htons(port);
-
+  server_address.sin_port = htons(*port);
 
   if (bind(main_socket, (struct sockaddr*) &server_address, sizeof(server_address)) < 0) {
     printf("[ERROR] Cannot bind the main server socket.\n");
     close(main_socket);
-    return -1;
+    exit(-1);
   }
   printf("[OK] Main socket binded.\n");
 
   if (listen(main_socket, MAX_CLIENTS) < 0) {
     printf("[ERORR] Error listening to main socket.\n");
     close(main_socket);
-    return -1;
+    exit(-1);
   }
   printf("[OK] Main socket is listening\n");
 
@@ -181,21 +162,27 @@ int start_network(int port) {
     client_socket = accept(main_socket, (struct sockaddr*) &client_address, &client_address_size);
     if (client_socket < 0) {
         /* if client connection fails, we can still accept other connections*/
-        printf("[WARNING] Error accepting client.\n");
+        // printf("[WARNING] Error accepting client.\n");
         continue;
     }
 
   	/* Check if max clients is reached */
   	if(client_count + 1 == MAX_CLIENTS){
-  		printf("Max clients reached. Connection rejected.\n");
+  		printf("[WARNING] Max clients reached. Connection rejected.\n");
   		close(client_socket);
   		continue;
   	}
 
   	/* Client settings */
   	client_struct* client = (client_struct *) malloc(sizeof(client_struct));
+    if (client == NULL) {
+      printf("[ERROR] Malloc did not work. Denying client.\n");
+      close(client_socket);
+      continue;
+    }
+
   	client->socket = client_socket;
-  	client->ID = (*ID)++;
+  	client->ID = ID++;
 
   	/* Add client and make new thread */
   	add_client(client);
@@ -207,7 +194,7 @@ int start_network(int port) {
 
   printf("[OK] Finished the start network.\n");
 
-  return 0;
+  // return 0;
 
 }
 
@@ -216,19 +203,20 @@ int start_network(int port) {
 Gameloop - TODO
 ======================
 **/
-void* gameloop(void * arg) {
+int gameloop() {
   printf("[OK] Entered the gameloop.\n");
   while (1) {
-    printf("Gameloop is here...\n");
     if (leave_flag) {
+      printf("Leave flag detected in gameloop.\n");
+      send_packet("quitfs\0");
       break;
     }
-    sleep(5);
+    sleep(1);
   }
 
   printf("[OK] Finished the gameloop.\n");
 
-  return NULL;
+  return 0;
 }
 
 /**

@@ -7,6 +7,30 @@
 #define MC_MAX_SIZE_STRING 256
 #endif
 
+int err_mess_return(char *message) {
+  printf("[ERROR] %s\n", message);
+  return -1;
+}
+
+int server_setup(int argc, char **argv, int *port) {
+    // validate parameters
+    if (argc != 2) {
+      printf("[Error] Please provide port argument only (ex: -p=9001).\n");
+      return -1;
+    }
+
+    *port = get_port("p", argc, argv);
+
+    if (*port < 0) {
+      printf("[ERROR] Cannot get port number, %d\n", *port);
+      return -1;
+    }
+
+    printf("[OK] Server starting on port %d.\n", *port);
+
+    return 0;
+}
+
 int get_named_argument(char* key, int argc, char **argv, char** result) {
   int i;
   for (i = 0; i < argc; i++) {
