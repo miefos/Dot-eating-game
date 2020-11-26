@@ -54,7 +54,8 @@ int main(int argc, char **argv){
   int port; if (server_setup(argc, argv, &port) < 0) return -1;
 
   // networking_thread
-  pthread_t networking_thread; pthread_create(&networking_thread, NULL, &start_network, &port);
+  pthread_t networking_thread;
+  pthread_create(&networking_thread, NULL, &start_network, &port);
 
   // start network
   if (gameloop() < 0) printf("[ERROR] error in gameloop().\n");
@@ -91,15 +92,24 @@ void* process_client(void* arg){
     int receive = recv(client->socket, buffer, BUFFER_SIZE, 0) > 0;
 		if (receive > 0){ // received packet
 			if(strlen(buffer) > 0){
-				broadcast_packet(buffer, client->ID);
-				printf("%s [from %s]\n", buffer, client->username);
+        if (strcmp(buffer, "quit") == 0) { // quit
+          sprintf(buffer, "%s left\n", client->username);
+          printf("%s", buffer);
+          broadcast_packet(buffer, client->ID);
+          client_leave_flag = 1;
+        } else { // normal packet
+				  broadcast_packet(buffer, client->ID);
+				  printf("%s [from %s]\n", buffer, client->username);
+        }
 			}
-		} else if (receive < 0 || strcmp(buffer, "quit") == 0){ // disconnection or error
-			sprintf(buffer, "%s left\n", client->username);
-			printf("%s", buffer);
-			broadcast_packet(buffer, client->ID);
+		} else if (receive < 0){ // disconnection or error
+      printf("[WARNING] From %s could not receive package.", client->username);
+		} else { // receive == 0
+      sprintf(buffer, "%s left\n", client->username);
+      printf("%s", buffer);
+      broadcast_packet(buffer, client->ID);
       client_leave_flag = 1;
-		}
+    }
 
 		bzero(buffer, BUFFER_SIZE);
 	}
@@ -162,7 +172,7 @@ void* start_network(void* arg) {
     client_socket = accept(main_socket, (struct sockaddr*) &client_address, &client_address_size);
     if (client_socket < 0) {
         /* if client connection fails, we can still accept other connections*/
-        // printf("[WARNING] Error accepting client.\n");
+        printf("[WARNING] Error accepting client.\n");
         continue;
     }
 
@@ -187,9 +197,6 @@ void* start_network(void* arg) {
   	/* Add client and make new thread */
   	add_client(client);
   	pthread_create(&new_client_threads, NULL, &process_client, (void *) client);
-
-  	/* Check for connections only once 1s */
-  	sleep(1);
   }
 
   printf("[OK] Finished the start network.\n");
@@ -213,6 +220,9 @@ int gameloop() {
     }
     sleep(1);
   }
+
+  // wait for packets to be sent etc
+  sleep(1.5);
 
   printf("[OK] Finished the gameloop.\n");
 

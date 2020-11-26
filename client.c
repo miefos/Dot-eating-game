@@ -25,10 +25,14 @@ void remove_newline(char *str) {
 
 void* send_loop(void* arg) {
 	int* client_socket = (int *) arg;
-  char message[BUFFER_SIZE] = {};
+  char message[BUFFER_SIZE+5] = {}; // +5 to check if entered too large message
 
   while(1) {
-    fgets(message, BUFFER_SIZE, stdin);
+    fgets(message, BUFFER_SIZE+5, stdin);
+    if (strlen(message) > BUFFER_SIZE || strlen(message) < 1) {
+        printf("Message should be between 1 and %d chars. \n", BUFFER_SIZE);
+        continue;
+    }
     setbuf(stdin, NULL); // clears overflow
     remove_newline(message);
 
@@ -88,31 +92,71 @@ int main(int argc, char **argv){
     return -1;
   }
 
-  char username[256];
-  char color[7];
+  char username[260]; // actually max 255
+  char color[10]; // actually max 6
+  // char trash_collector[1024];
 
 	// catch SIGINT (Interruption, e.g., ctrl+c)
 	signal(SIGINT, set_leave_flag);
 
+
+  // insert username
+  int username_ok = 1;
 	printf("Please enter your username: ");
-  fgets(username, 256, stdin);
+  fgets(username, 260, stdin);
   remove_newline(username);
-  setbuf(stdin, NULL); // clears overflow
-
-	printf("Please enter your color (6 hex digits): ");
-  fgets(color, 7, stdin);
-  remove_newline(color);
-  setbuf(stdin, NULL); // clears overflow
-
-  if (strlen(username) < 1 || strlen(color) < 1) {
-    printf("[ERROR] Username or color is too short. Try again.\n");
-    return -1;
+  if (strlen(username) > 255 || strlen(username) < 2) {
+      printf("Username should be between 2 and 255 chars. \n");
+      username_ok = 0;
   }
 
-  // create socket
-  int client_socket;
+  while (!username_ok) {
+    printf("Please try again: ");
+    fgets(username, 260, stdin);
+    remove_newline(username);
+    if (strlen(username) > 255 || strlen(username) < 2) {
+      printf("Username should be between 2 and 255 chars. \n");
+      username_ok = 0;
+    } else {
+      username_ok = 1;
+    }
+  }
 
-  client_socket = socket(AF_INET, SOCK_STREAM, 0);
+  // insert color
+  int color_ok = 1;
+	printf("Please enter your color (6 hex digits): ");
+  fgets(color, 10, stdin);
+  remove_newline(color);
+  if (strlen(color) != 6) {
+    printf("Color should be exactly 6 hex digits. \n");
+    color_ok = 0;
+  }
+
+  char c;
+  if ((c = contains_only_hex_digits(color)) != -1) {
+    printf("Color contains non-hex-digit character: %c\n", c);
+    color_ok = 0;
+  }
+
+  while (!color_ok) {
+    printf("Please try again: ");
+    fgets(color, 10, stdin);
+    remove_newline(color);
+    if (strlen(color) != 6) {
+      printf("Color should be exactly 6 hex digits. \n");
+      color_ok = 0;
+    } else if ((c = contains_only_hex_digits(color)) != -1) {
+      printf("Color contains non-hex-digit character: %c\n", c);
+      color_ok = 0;
+    } else {
+      color_ok = 1;
+    }
+  }
+
+
+
+  // create socket
+  int client_socket = socket(AF_INET, SOCK_STREAM, 0);
 
   // specify an address for the socket
   struct sockaddr_in server_address;
@@ -128,7 +172,7 @@ int main(int argc, char **argv){
   }
 
 	// Send intro
-	char intro_packet[270];
+	char intro_packet[300];
 	sprintf(intro_packet, "%s (#%s)", username, color);
 	send(client_socket, intro_packet, strlen(intro_packet), 0);
 

@@ -2,15 +2,30 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h> // toupper
 
 #ifndef MC_MAX_SIZE_STRING
 #define MC_MAX_SIZE_STRING 256
 #endif
 
-int err_mess_return(char *message) {
-  printf("[ERROR] %s\n", message);
-  return -1;
+int contains_only_hex_digits(char* str) {
+  for (int i = 0; str[i] != '\0'; i++) {
+    char c = toupper(str[i]);
+    if ((c < 48 || c > 57) && // decimal digit
+        (c < 65 || c > 70)) { // 'A' - 'F'
+        return str[i]; // invalid char
+    } else {
+      str[i] = c; // make uppercase
+    }
+  }
+
+  return -1; // yes, contains only hex digits
 }
+
+// int err_mess_return(char *message) {
+//   printf("[ERROR] %s\n", message);
+//   return -1;
+// }
 
 int server_setup(int argc, char **argv, int *port) {
     // validate parameters
