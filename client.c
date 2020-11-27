@@ -10,40 +10,47 @@
 #include <sys/mman.h>
 #include "functions.h"
 
-#define BUFFER_SIZE 1024
-
 int leave_flag = 0;
 
 void set_leave_flag() {
     leave_flag = 1;
 }
 
-void remove_newline(char *str) {
-      if (strlen(str) > 0 && str[strlen(str)-1] == '\n')
-      	str[strlen(str)-1] = '\0';
+void set_data_packet_0 (char* data, char* username, char* color, int name_len) {
+  // Data packet contents:
+  // ============================
+  // [byte 0] = chars in username
+  // [byte 1 ... strlen(username) + 1] = username
+  // [byte strlen(username) + 1 ... strlen(username) + 1 + 6] = color
+  // ============================
+  // note for color bytes: there are 6 chars in color - 6 hex digits.
+
+  if (name_len == 0) {
+    printf("[ERROR] This should not happen so no further analysis.\n");
+  }
+
+  data[0] = name_len & 0xFF; // cuts to 1 byte
+  memcpy(data + 1, username, name_len); // no need to escape since its string
+  memcpy(data + 1 + name_len, color, 6); // no need to escape since its string
+  // null terminator, will NOT be in packet but helpful in creating packet...
+  data[1 + name_len + 6] = '\0';
 }
 
 void* send_loop(void* arg) {
 	int* client_socket = (int *) arg;
-  char message[BUFFER_SIZE+5] = {}; // +5 to check if entered too large message
+  char message[1];
 
   while(1) {
-    fgets(message, BUFFER_SIZE+5, stdin);
-    if (strlen(message) > BUFFER_SIZE || strlen(message) < 1) {
-        printf("Message should be between 1 and %d chars. \n", BUFFER_SIZE);
-        continue;
-    }
-    setbuf(stdin, NULL); // clears overflow
-    remove_newline(message);
+    message[0] = fgetc(stdin);
 
-    if (strcmp(message, "quit") == 0) {
-    	set_leave_flag();
-    	return NULL;
-    } else {
-      send(*client_socket, message, strlen(message), 0);
-    }
+    // if (strcmp(message, "quit") == 0) {
+    // 	set_leave_flag();
+    // 	return NULL;
+    // } else {
+      if (message[0] != '\n') // do not send newline
+        send(*client_socket, message, 1, 0);
+    // }
 
-    bzero(message, BUFFER_SIZE);
   }
 
   return NULL;
@@ -51,132 +58,56 @@ void* send_loop(void* arg) {
 
 void* receive_loop(void* arg) {
   int* client_socket = (int *) arg;
-	char message[BUFFER_SIZE] = {};
+	char message[2] = {'\0'};
   while (1) {
-    if (recv(*client_socket, message, BUFFER_SIZE, 0) > 0) {
-      if (strcmp(message, "quitfs") == 0) { // quit from server
-        printf("Received quitfs\n");
-        set_leave_flag();
-        return NULL;
-      }
-      printf("%s\n", message);
-    } else { // disconnection or error
-       break;
-    }
-	  bzero(message, BUFFER_SIZE);
+    if (recv(*client_socket, message, 1, 0) > 0) {
+      // if (strcmp(message, "quitfs") == 0) { // quit from server
+      //   printf("Received quitfs\n");
+      //   set_leave_flag();
+      //   return NULL;
+      // }
+      printf("%s", message);
+    } else break; // disconnection or error
   }
 
   return NULL;
 }
 
+
+
+
+
 int main(int argc, char **argv){
+  unsigned char packet[MAX_PACKET_SIZE];
+  char data[MAX_PACKET_SIZE];
 
-  // validate parameters
-  if (argc != 3) {
-    printf("[Error] Please provide IP and port argument only (ex: -a=123.123.123.123 -p=9001).\n");
-    return -1;
-  }
-
-  int port = get_port("p", argc, argv);
-
-  if (port < 0) {
-    printf("[ERROR] Cannot get port number, errno %d\n", port);
-    return -1;
-  }
-
-  char* ip = NULL;
-  int result = get_named_argument("a", argc, argv, &ip);
-
-  if (result < 0 && ip != NULL) {
-    printf("[ERROR] Cannot get IP, errno %d\n", result);
-    return -1;
-  }
-
-  char username[260]; // actually max 255
-  char color[10]; // actually max 6
-  // char trash_collector[1024];
-
-	// catch SIGINT (Interruption, e.g., ctrl+c)
+  // catch SIGINT (Interruption, e.g., ctrl+c)
 	signal(SIGINT, set_leave_flag);
 
+  // client setup
+  int port, client_socket; char ip[100];
+  if ((client_socket = client_setup(argc, argv, &port, ip)) < 0) return -1;
 
-  // insert username
-  int username_ok = 1;
-	printf("Please enter your username: ");
-  fgets(username, 260, stdin);
-  remove_newline(username);
-  if (strlen(username) > 255 || strlen(username) < 2) {
-      printf("Username should be between 2 and 255 chars. \n");
-      username_ok = 0;
+  // get username, color
+  char username[256], color[7];
+  get_username_color(username, color);
+
+	// Send 0th packet
+  set_data_packet_0(data, username, color, strlen(username));
+  int packet_size = create_packet(packet, 0, data);
+
+  for (int i = 0; i < packet_size; i++) {
+    printf("Sending 0th packet's element %d: %c (%d)\n", i, printable_char(packet[i]), packet[i]);
+  	send(client_socket, (packet + i), 1, 0);
   }
 
-  while (!username_ok) {
-    printf("Please try again: ");
-    fgets(username, 260, stdin);
-    remove_newline(username);
-    if (strlen(username) > 255 || strlen(username) < 2) {
-      printf("Username should be between 2 and 255 chars. \n");
-      username_ok = 0;
-    } else {
-      username_ok = 1;
-    }
-  }
-
-  // insert color
-  int color_ok = 1;
-	printf("Please enter your color (6 hex digits): ");
-  fgets(color, 10, stdin);
-  remove_newline(color);
-  if (strlen(color) != 6) {
-    printf("Color should be exactly 6 hex digits. \n");
-    color_ok = 0;
-  }
-
-  char c;
-  if ((c = contains_only_hex_digits(color)) != -1) {
-    printf("Color contains non-hex-digit character: %c\n", c);
-    color_ok = 0;
-  }
-
-  while (!color_ok) {
-    printf("Please try again: ");
-    fgets(color, 10, stdin);
-    remove_newline(color);
-    if (strlen(color) != 6) {
-      printf("Color should be exactly 6 hex digits. \n");
-      color_ok = 0;
-    } else if ((c = contains_only_hex_digits(color)) != -1) {
-      printf("Color contains non-hex-digit character: %c\n", c);
-      color_ok = 0;
-    } else {
-      color_ok = 1;
-    }
-  }
-
-
-
-  // create socket
-  int client_socket = socket(AF_INET, SOCK_STREAM, 0);
-
-  // specify an address for the socket
-  struct sockaddr_in server_address;
-  server_address.sin_family = AF_INET;
-  server_address.sin_port = htons(port);
-  server_address.sin_addr.s_addr = inet_addr(ip); // ATTENTION !!! inet_addr();
-
-  int connection_status = connect(client_socket, (struct sockaddr *) &server_address, sizeof(server_address));
-  // check for error with the connection
-  if (connection_status < 0) {
-    printf("[ERROR] There was an error with the connection.\n");
+  if (packet_size > 0) {
+    printf("0th packet sent.\n");
+  } else {
+    printf("[ERROR] 0th packet not sent\n");
     return -1;
   }
 
-	// Send intro
-	char intro_packet[300];
-	sprintf(intro_packet, "%s (#%s)", username, color);
-	send(client_socket, intro_packet, strlen(intro_packet), 0);
-
-  printf("Sending intro packet: %s\n", intro_packet);
 
 	pthread_t send_thread;
   if(pthread_create(&send_thread, NULL, (void *) send_loop, &client_socket) != 0){
@@ -184,6 +115,8 @@ int main(int argc, char **argv){
     return -1;
 	}
 
+	// char username[270];
+  // char ;
 	pthread_t receive_thread;
   if(pthread_create(&receive_thread, NULL, (void *) receive_loop, &client_socket) != 0){
 		printf("ERROR: thread creating err. \n");
@@ -258,6 +191,8 @@ int main(int argc, char **argv){
     /***
 
 Problem - client was resource intensive (took ~100% CPU). Added sleep in main while loop.
-
+for shared memory could not use char str[200] = ""; needed to use strcpy... Because changed address...
+problem related unsigned char
 
     **/
+
