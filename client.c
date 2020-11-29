@@ -9,31 +9,18 @@
 #include <string.h>
 #include <sys/mman.h>
 #include "functions.h"
+#include "util_functions.h"
+#include "setup.h"
 
 int leave_flag = 0;
+// 0 - client not set
+// 1 - received packet 1, client set
+// 2 - client has sent ready status to server
+// 3 ...
+int client_status = 0;
 
 void set_leave_flag() {
     leave_flag = 1;
-}
-
-void set_data_packet_0 (char* data, char* username, char* color, int name_len) {
-  // Data packet contents:
-  // ============================
-  // [byte 0] = chars in username
-  // [byte 1 ... strlen(username) + 1] = username
-  // [byte strlen(username) + 1 ... strlen(username) + 1 + 6] = color
-  // ============================
-  // note for color bytes: there are 6 chars in color - 6 hex digits.
-
-  if (name_len == 0) {
-    printf("[ERROR] This should not happen so no further analysis.\n");
-  }
-
-  data[0] = name_len & 0xFF; // cuts to 1 byte
-  memcpy(data + 1, username, name_len); // no need to escape since its string
-  memcpy(data + 1 + name_len, color, 6); // no need to escape since its string
-  // null terminator, will NOT be in packet but helpful in creating packet...
-  data[1 + name_len + 6] = '\0';
 }
 
 void* send_loop(void* arg) {
@@ -41,88 +28,82 @@ void* send_loop(void* arg) {
   char message[1];
 
   while(1) {
-    message[0] = fgetc(stdin);
-
-    // if (strcmp(message, "quit") == 0) {
-    // 	set_leave_flag();
-    // 	return NULL;
-    // } else {
-      if (message[0] != '\n') // do not send newline
-        send(*client_socket, message, 1, 0);
-    // }
-
+    if ((message[0] =  fgetc(stdin)) != '\n') { // do not send newline
+      if (client_status == 2) client_status = 3;
+      else if (client_status == 0) send(*client_socket, message, 1, 0);
+      else if (client_status == 1) send(*client_socket, message, 1, 0);
+      else if (client_status == 4) send(*client_socket, message, 1, 0);
+      else if (client_status == 5) send(*client_socket, message, 1, 0);
+    }
   }
 
   return NULL;
 }
 
 void* receive_loop(void* arg) {
+
+  unsigned char packet_in[MAX_PACKET_SIZE];
+  int result;
+  // 0 = no packet, 1 = packet started, 2 = packet started, have size
+  int packet_status = 0;
+  int packet_cursor = 0; // keeps track which packet_in index is set last
+  int packet_data_size = 0;
+
   int* client_socket = (int *) arg;
-	char message[2] = {'\0'};
-  while (1) {
-    if (recv(*client_socket, message, 1, 0) > 0) {
-      // if (strcmp(message, "quitfs") == 0) { // quit from server
-      //   printf("Received quitfs\n");
-      //   set_leave_flag();
-      //   return NULL;
-      // }
-      printf("%s", message);
-    } else break; // disconnection or error
-  }
+
+	while(1){
+    if (leave_flag) break;
+
+    if ((result = recv_byte(packet_in, &packet_cursor, &packet_data_size, &packet_status, 0, NULL, *client_socket, &client_status)) > 0) {
+        // everything done in recv_byte already...
+		} else if (result < 0){ // disconnection or error
+      printf("[WARNING] Could not receive package.\n");
+      set_leave_flag();
+		} else { // receive == 0
+      printf("Recv failed. Leave flag set.\n");
+      set_leave_flag();
+    }
+
+	}
 
   return NULL;
 }
 
-
-
-
-
 int main(int argc, char **argv){
-  unsigned char packet[MAX_PACKET_SIZE];
-  char data[MAX_PACKET_SIZE];
+  unsigned char p[MAX_PACKET_SIZE];
+  // unsigned char data[MAX_PACKET_SIZE];
 
   // catch SIGINT (Interruption, e.g., ctrl+c)
 	signal(SIGINT, set_leave_flag);
 
   // client setup
-  int port, client_socket; char ip[100];
-  if ((client_socket = client_setup(argc, argv, &port, ip)) < 0) return -1;
+  int port, c_socket; char ip[100];
+  if ((c_socket = client_setup(argc, argv, &port, ip)) < 0) return -1;
+
 
   // get username, color
   char username[256], color[7];
   get_username_color(username, color);
 
 	// Send 0th packet
-  set_data_packet_0(data, username, color, strlen(username));
-  int packet_size = create_packet(packet, 0, data);
+  int packet_size = _create_packet_0(p, username, color);
+  send_prepared_packet(p, packet_size, c_socket);
 
-  for (int i = 0; i < packet_size; i++) {
-    printf("Sending 0th packet's element %d: %c (%d)\n", i, printable_char(packet[i]), packet[i]);
-  	send(client_socket, (packet + i), 1, 0);
-  }
-
-  if (packet_size > 0) {
-    printf("0th packet sent.\n");
-  } else {
-    printf("[ERROR] 0th packet not sent\n");
-    return -1;
-  }
-
-
+  // start send thread
 	pthread_t send_thread;
-  if(pthread_create(&send_thread, NULL, (void *) send_loop, &client_socket) != 0){
+  if(pthread_create(&send_thread, NULL, (void *) send_loop, &c_socket) != 0){
 		printf("[ERROR] thread creating err. \n");
     return -1;
 	}
 
-	// char username[270];
-  // char ;
+  // start receive thread
 	pthread_t receive_thread;
-  if(pthread_create(&receive_thread, NULL, (void *) receive_loop, &client_socket) != 0){
+  if(pthread_create(&receive_thread, NULL, (void *) receive_loop, &c_socket) != 0){
 		printf("ERROR: thread creating err. \n");
 		return -1;
 	}
 
+  // each sec check if should finish program
 	while (1){
     if(leave_flag){
       printf("The game has ended.\n");
@@ -131,7 +112,8 @@ int main(int argc, char **argv){
     sleep(1);
 	}
 
-	close(client_socket);
+  // close conn
+	close(c_socket);
 
 	return 0;
 }
@@ -195,4 +177,3 @@ for shared memory could not use char str[200] = ""; needed to use strcpy... Beca
 problem related unsigned char
 
     **/
-

@@ -1,35 +1,49 @@
-#ifndef MY_FUNCTIONS_H
-#define MY_FUNCTIONS_H
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
-#define MAX_CLIENTS 10
+#define MAX_CLIENTS 20
+#define MIN_CLIENTS 2 // to start the game
+#define INITIAL_N_DOTS 6
 #define BUFFER_SIZE 1024
 #define MAX_PACKET_SIZE 10000
+#define INIT_SIZE 10
+#define INIT_LIVES 1
+#define MAX_X 1000
+#define MAX_Y 1000
+#define TIME_LIM 180 // in sec
 
-int get_named_argument(char* key, int argc, char **argv, char** result);
-int get_port(char* key, int argc, char** argv);
-int contains_only_hex_digits(char* str);
+typedef struct {
+  int socket;
+  unsigned char ID;
+  unsigned char ready;
+  unsigned char connected; // 0 - this client is not connected, 1 - this client is connected
+  unsigned char has_introduced; // meaning the 0th packet is received (at first 0, when receives set it to 1)
+  char username[256];
+  char color[7];
+  unsigned int x;
+  unsigned int y;
+  unsigned int size;
+  unsigned int score;
+  unsigned int lives;
+} client_struct;
 
+typedef struct {
+  unsigned int x;
+  unsigned int y;
+} dot;
 
-int get_int_from_4bytes_lendian(unsigned char* the4bytes);
-int server_network_setup(int* main_socket, struct sockaddr_in* server_address, int port);
-int server_parse_args(int argc, char **argv, int *port);
-int client_setup(int argc, char **argv, int *port, char *ip);
+int _create_packet_0(unsigned char* p, char* name, char* color);
+int _create_packet_1(unsigned char* p, unsigned char g_id, unsigned char p_id, unsigned int p_init_size, unsigned int x_max, unsigned int y_max, unsigned int time_lim, unsigned int n_lives);
+int _create_packet_2(unsigned char* p, unsigned char g_id, unsigned char p_id, unsigned char r_char);
+int _create_packet_3(unsigned char* p, unsigned char g_id, client_struct** clients, unsigned short int n_dots, dot** dots, unsigned int time_left);
+int send_packet_1(client_struct* client);
+int process_packet_0(unsigned char* p_dat, client_struct* client);
+int process_packet_1(unsigned char* p_dat, int c_socket, int *client_status);
+void process_incoming_packet(unsigned char *p, int size_header, int size_data, client_struct* client, int c_socket, int *client_status, int is_server);
+int recv_byte (unsigned char* packet_in, int *packet_cursor, int *current_packet_data_size, int *packet_status, int is_server, client_struct* client, int client_socket, int* client_status);
+int send_prepared_packet(unsigned char* p, int p_size, int socket);
 int get_username_color(char* username, char* color);
-void remove_newline(char *str);
-int is_little_endian_system();
-int escape_assign(int num, unsigned char* packet);
-// int memcpy_and_escape(void* destination, void* source, int size); // returns how many were replaced
-// void set_leave_flag(int *flag);
-
-char printable_char(char c);
-void print_bytes(void* packet, int count);
-int assign_int_to_bytes_lendian_escape(unsigned char* packet_part, int n, int should_escape);
-unsigned char get_checksum(unsigned char* packet_header, int length_header_excl_div, unsigned char* packet_data, int data_length);
-int create_packet(unsigned char* packet, int type, char* data);
-
-
-
-#endif
-
+int process_str(char* str, unsigned char* xor, unsigned char* p_part);
+int process_int_lendian(int n, unsigned char* p_part, unsigned char* xor);
+int process_short_int_lendian(short int n, unsigned char* p_part, unsigned char* xor);
+int set_packet_header(unsigned char type, unsigned char* p, unsigned int N_LEN, unsigned int npk, unsigned char* xor);
