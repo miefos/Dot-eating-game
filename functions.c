@@ -278,16 +278,6 @@ int _packet6_helper_process_clients(client_struct** clients, int* n_clients, uns
   return esc_total; // used only for N_LEN
 }
 
-//    packet[0] = game ID
-//    packet[1] = Receiver's ID
-//    packet[2,3,4,5] = Receiver's score (unsigned int)
-//    packet[6,7] = Number of players (including receiver) (unsigned short int)
-//    packet[8 ... ] = LEADERBOARD DATA (below) ... goes into for loop for each player
-//    for (i=0; i < num of players; i++)
-//       data[0 + prev] = strlen(name) (unsigned char = 1 byte)
-//       data[1 + prev ... 1 + prev + strlen(name)] = username
-//       data[1 + prev + strlen(name) ... 5 + prev + strlen(name)] = score (unsigned int = 4 bytes)
-
 int _create_packet_6(unsigned char* p, unsigned char g_id, client_struct** clients, unsigned char curr_player_id, unsigned int curr_player_score) {
   unsigned char p_user_data[MAX_PACKET_SIZE];
   const unsigned char type = 6;
@@ -316,8 +306,35 @@ int _create_packet_6(unsigned char* p, unsigned char g_id, client_struct** clien
   return last + 1;
 }
 
+int _create_packet_7(unsigned char* p, unsigned char g_id, unsigned char p_id, char* message) {
+  const unsigned char type = 7;
+  unsigned char xor = 0;
+  unsigned int npk = 0, message_l = strlen(message);
+  int esc = 0;
+  const unsigned char N_LEN = message_l + 4;
 
+  // p header
+  int h_size = 11;
+  esc += set_packet_header(type, p, N_LEN, npk, &xor);
 
+  // p data
+  xor ^= g_id; xor^= p_id;
+  esc += escape_assign(g_id, &p[h_size + esc]); // game id (1 byte)
+  esc += escape_assign(p_id, &p[h_size + esc + 1]); // player id ID (1 byte)
+  esc += process_short_int_lendian(message_l, &p[h_size + esc + 2], &xor); // message length (2 bytes)
+  // memcpy + xor
+  int i;
+  for (i = 0; i < message_l; i++) {
+    xor ^= message[i];
+    p[h_size + esc + 4 + i] = message[i];
+  }
+
+  // p footer
+  int last = h_size + esc + 4 + message_l;
+  p[last] = xor; // xor
+
+  return last + 1;
+}
 
 int process_packet_0(unsigned char* p_dat, client_struct* client) {
   unsigned char name_l = (unsigned char) p_dat[0];
@@ -360,11 +377,11 @@ int process_packet_1(unsigned char* p_dat, int c_socket, int *client_status, uns
   *client_status = 1;
   *g_id = p_dat[0];
   *p_id = p_dat[1];
-  unsigned int p_init_size = get_int_from_up_to_4bytes_lendian(&p_dat[2]);
-  unsigned int max_x = get_int_from_up_to_4bytes_lendian(&p_dat[6]);
-  unsigned int max_y = get_int_from_up_to_4bytes_lendian(&p_dat[10]);
-  unsigned int time_limit = get_int_from_up_to_4bytes_lendian(&p_dat[14]);
-  unsigned int num_of_lives = get_int_from_up_to_4bytes_lendian(&p_dat[18]);
+  unsigned int p_init_size = get_int_from_4bytes_lendian(&p_dat[2]); // 4 bytes
+  unsigned int max_x = get_int_from_4bytes_lendian(&p_dat[6]); // 4 bytes
+  unsigned int max_y = get_int_from_4bytes_lendian(&p_dat[10]); // 4 bytes
+  unsigned int time_limit = get_int_from_4bytes_lendian(&p_dat[14]); // 4 bytes
+  unsigned int num_of_lives = get_int_from_4bytes_lendian(&p_dat[18]); // 4 bytes
 
   printf("[OK] Got packet 1. Game ID = %d, Player ID = %d, p_init_size = %d, field size (%d, %d), time %d, lives %d\n",
           *g_id, *p_id, p_init_size, max_x, max_y, time_limit, num_of_lives);
@@ -425,7 +442,7 @@ int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
   printf("[OK] Packet 3 received.\n");
 
   g_id = p[0];
-  n_players = get_int_from_up_to_4bytes_lendian(&p[1]); // 2 byte int
+  n_players = get_int_from_4bytes_lendian(&p[1]); // 2 byte int
 
   // get PLAYER DATA
   printf("[OK] The following clients were received by packet3: \n");
@@ -440,12 +457,12 @@ int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
     client->ID = p[3 + total_client_len];
     name_l = p[4 + total_client_len];
     memcpy(client->username, &p[5 + total_client_len], name_l);
-    client->x = get_int_from_up_to_4bytes_lendian(&p[5 + name_l + total_client_len]);
-    client->y = get_int_from_up_to_4bytes_lendian(&p[9 + name_l + total_client_len]);
+    client->x = get_int_from_4bytes_lendian(&p[5 + name_l + total_client_len]); // 4 bytes
+    client->y = get_int_from_4bytes_lendian(&p[9 + name_l + total_client_len]); // 4 bytes
     memcpy(client->color, &p[13 + total_client_len + name_l], 6);
-    client->size = get_int_from_up_to_4bytes_lendian(&p[19 + total_client_len + name_l]);
-    client->score = get_int_from_up_to_4bytes_lendian(&p[23 + total_client_len + name_l]);
-    client->lives = get_int_from_up_to_4bytes_lendian(&p[27 + total_client_len + name_l]);
+    client->size = get_int_from_4bytes_lendian(&p[19 + total_client_len + name_l]); // 4 bytes
+    client->score = get_int_from_4bytes_lendian(&p[23 + total_client_len + name_l]); // 4 bytes
+    client->lives = get_int_from_4bytes_lendian(&p[27 + total_client_len + name_l]); // 4 bytes
 
     clients[i] = client;
 
@@ -455,7 +472,7 @@ int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
       total_client_len += 30 + name_l - 3 + 1;
   }
 
-  n_dots = get_int_from_up_to_4bytes_lendian(&p[3 + total_client_len]);
+  n_dots = get_sh_int_2bytes_lendian(&p[3 + total_client_len]); // 2 bytes
   dot* dots[n_dots];
 
   // get DOT DATA
@@ -467,8 +484,8 @@ int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
       return -1;
     }
 
-    somedot->x = get_int_from_up_to_4bytes_lendian(&p[3 + total_client_len + 2 + i*8]);
-    somedot->y = get_int_from_up_to_4bytes_lendian(&p[3 + total_client_len + 2 + i*8 + 4]);
+    somedot->x = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + i*8]); // 4 bytes
+    somedot->y = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + i*8 + 4]); // 4 bytes
 
     dots[i] = somedot;
   }
@@ -480,7 +497,7 @@ int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
     else printf("[%d, %d], ", dots[i]->x, dots[i]->y);
   }
 
-  time_left = get_int_from_up_to_4bytes_lendian(&p[3 + total_client_len + 2 + n_dots*8]);
+  time_left = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + n_dots*8]); // 4 bytes
 
   printf("[OK] time left: %d\n", time_left);
 
@@ -515,8 +532,8 @@ int process_packet_5(unsigned char* p_dat, int* client_status) {
   p_id = p_dat[1];
 
   unsigned int score, time_passed;
-  score = get_int_from_up_to_4bytes_lendian(&p_dat[2]);
-  time_passed = get_int_from_up_to_4bytes_lendian(&p_dat[6]);
+  score = get_int_from_4bytes_lendian(&p_dat[2]); // 4 bytes
+  time_passed = get_int_from_4bytes_lendian(&p_dat[6]); // 4 bytes
 
   printf("[OK] Received packet 5. You died. Your score: %d, time passed %d. g_id=%d, p_id=%d\n", score, time_passed, g_id, p_id);
 
@@ -532,8 +549,8 @@ int process_packet_6(unsigned char* p_dat, int* client_status) {
   p_id = p_dat[1];
 
   unsigned int score;
-  score = get_int_from_up_to_4bytes_lendian(&p_dat[2]); // 4 bytes
-  n_players = get_int_from_up_to_4bytes_lendian(&p_dat[6]); // 2 bytes
+  score = get_int_from_4bytes_lendian(&p_dat[2]); // 4 bytes
+  n_players = get_int_from_4bytes_lendian(&p_dat[6]); // 2 bytes
 
   printf("[OK] Received packet 6. GAME ENDED. g_id=%d, p_id=%d, p_score=%d\n", g_id, p_id, score);
 
@@ -547,7 +564,7 @@ int process_packet_6(unsigned char* p_dat, int* client_status) {
 
     name_l = p_dat[8 + bytesRead]; // 1 byte
     memcpy(username, &p_dat[8 + bytesRead + 1], name_l); // name_l bytes
-    score = get_int_from_up_to_4bytes_lendian(&p_dat[8 + bytesRead + 1 + name_l]); // 4 bytes
+    score = get_int_from_4bytes_lendian(&p_dat[8 + bytesRead + 1 + name_l]); // 4 bytes
 
     bytesRead += 1 + name_l + 4;
 
@@ -555,6 +572,23 @@ int process_packet_6(unsigned char* p_dat, int* client_status) {
   }
 
   *client_status = 6;
+
+  return 0;
+}
+
+
+int process_packet_7 (unsigned char* p_dat) {
+  unsigned char g_id, p_id;
+  char message[MAX_MESSAGE_SIZE + 1] = {0};
+  g_id = p_dat[0];
+  p_id = p_dat[1];
+
+  short int message_l;
+  message_l = get_sh_int_2bytes_lendian(&p_dat[2]); // 2 bytes
+
+  memcpy(message, &p_dat[4], message_l); // name_l bytes
+
+  printf("Received new message: %s\n gid=%d,pid=%d\n", message, g_id, p_id);
 
   return 0;
 }
@@ -596,6 +630,10 @@ void process_incoming_packet(unsigned char *p, int size_header, int size_data, c
     case 6:
       if (!is_server) process_result = process_packet_6(&p[size_header], client_status);
       break;
+    case 7:
+      print_bytes(&p[size_header], size - size_header);
+      process_result = process_packet_7(&p[size_header]);
+      break;
     default:
       printf("Invalid packet type. Abandoned.\n");
       process_result = -1;
@@ -629,7 +667,7 @@ int recv_byte (
   if (client != NULL) socket = client->socket;
 
   if (*packet_cursor == 5) { // position just after N_LEN
-      *current_packet_data_size = get_int_from_up_to_4bytes_lendian(&packet_in[1]);
+      *current_packet_data_size = get_int_from_4bytes_lendian(&packet_in[1]);
       *packet_status = 2;
       printf("[OK] Got packet data size: %d\n", *current_packet_data_size);
   }

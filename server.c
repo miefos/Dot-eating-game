@@ -162,8 +162,16 @@ int gameloop() {
 		// init leave flag with CTRL + C. So it will send packet 6.
     if (leave_flag) {
       printf("Leave flag detected in gameloop.\n");
-			for(int i=0; i < MAX_CLIENTS; ++i) {
+			for (int i=0; i < MAX_CLIENTS; ++i) {
 				if(clients[i]) {
+					int p_size1 =  _create_packet_7(p, g_id, clients[i]->ID, "Sorry, time to go. I stopped the server.");
+					if (send_prepared_packet(p, p_size1, clients[i]->socket) < 0) {
+						printf("[ERROR] Packet 7 could not be sent.\n");
+					} else {
+						printf("[OK] Packet 7 sent successfully.\n");
+					}
+
+
 					int p_size = _create_packet_6(p, g_id, clients, clients[i]->ID, clients[i]->score);
 					if (send_prepared_packet(p, p_size, clients[i]->socket) < 0) {
 						printf("[ERROR] Packet 6 could not be sent.\n");

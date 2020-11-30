@@ -68,9 +68,14 @@ int assign_int_to_bytes_lendian_escape(unsigned char* packet_part, int n, int sh
   return escape_count;
 }
 
-int get_int_from_up_to_4bytes_lendian(unsigned char* the4bytes) {
+int get_int_from_4bytes_lendian(unsigned char* the4bytes) {
   // It works only for little endian...
   return *((int *) the4bytes);
+}
+
+short int get_sh_int_2bytes_lendian(unsigned char* the2bytes) {
+  // It works only for little endian...
+  return *((short int *) the2bytes);
 }
 
 

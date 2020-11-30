@@ -39,8 +39,16 @@ void* send_loop(void* arg) {
       else if (client_status == 0) send(*client_socket, message, 1, 0); // just send
       else if (client_status == 1) send(*client_socket, message, 1, 0); // just send
       else if (client_status == 4) { // getchar for packet 4 updates
-        char w = 0, a = 0, s = 0, d = 0;
         unsigned char p[MAX_PACKET_SIZE];
+
+        int p_size1 =  _create_packet_7(p, g_id, p_id, "I decided to send you an update about my keypresses.");
+        if (send_prepared_packet(p, p_size1, *client_socket) < 0) {
+          printf("[ERROR] Packet 7 could not be sent.\n");
+        } else {
+          printf("[OK] Packet 7 sent successfully.\n");
+        }
+
+        char w = 0, a = 0, s = 0, d = 0;
         // somehow should determine which keys pressed ... currently hard-coded.
         // perhaps also some logic should be changed so that this not come only after fgetc
         w = 1; a = 0; s = 1; d = 1; // 1 - pressed, 0 - not pressed
