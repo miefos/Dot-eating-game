@@ -91,7 +91,7 @@
 //    packet[2][7] = bit - d is pressed (1 - yes)
 //    =========================================================
 //
-// 5) Game ended (server -> client)
+// 5) Game Lost (died) (server -> client)
 //    ================ [5th PACKET DATA CONTENT] ==================
 //    packet[0] = game ID
 //    packet[1] = player ID
@@ -99,5 +99,15 @@
 //    packet[6,7,8,9] = time_passed (unsigned int)
 //    =========================================================
 //
-// 6)
-//
+// 6) Game has ended (server -> all clients but each client different packet)
+//    ================ [6th PACKET DATA CONTENT] ==================
+//    packet[0] = game ID
+//    packet[1] = Receiver's ID
+//    packet[2,3,4,5] = Receiver's score (unsigned int)
+//    packet[6,7] = Number of players (including receiver) (unsigned short int)
+//    packet[8 ... ] = LEADERBOARD DATA (below) ... goes into for loop for each player
+//    for (i=0; i < num of players; i++)
+//       data[0 + prev] = strlen(name) (unsigned char = 1 byte)
+//       data[1 + prev ... 1 + prev + strlen(name)] = username
+//       data[1 + prev + strlen(name) ... 5 + prev + strlen(name)] = score (unsigned int = 4 bytes)
+//    =========================================================

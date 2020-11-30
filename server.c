@@ -159,11 +159,22 @@ int gameloop() {
 	int time_to_sleep = 5; // secs
 	int drop_player_after = 12; // secs
   while (1) {
+		// init leave flag with CTRL + C. So it will send packet 6.
     if (leave_flag) {
       printf("Leave flag detected in gameloop.\n");
-      // send_packet_to_all("quitfs\0", strlen("quitfs\0"));
+			for(int i=0; i < MAX_CLIENTS; ++i) {
+				if(clients[i]) {
+					int p_size = _create_packet_6(p, g_id, clients, clients[i]->ID, clients[i]->score);
+					if (send_prepared_packet(p, p_size, clients[i]->socket) < 0) {
+						printf("[ERROR] Packet 6 could not be sent.\n");
+					} else {
+						printf("[OK] Packet 6 sent successfully.\n");
+					}
+				}
+			}
       break;
     }
+
 
 		int packet_size = _create_packet_3(p, g_id, clients, INITIAL_N_DOTS, dots, TIME_LIM - 2);
 		send_packet_to_all(p, packet_size); // should have return val...
@@ -182,8 +193,6 @@ int gameloop() {
 					} else {
 						printf("[OK] Packet 5 sent successfully.\n");
 					}
-
-
 				}
 			}
 		}

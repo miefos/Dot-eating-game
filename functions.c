@@ -148,7 +148,7 @@ int _packet3_helper_process_clients(client_struct** clients, int* n_clients, uns
 
       esc_total += esc_internal;
 
-      bytesWritten += 27 + esc_internal + name_l + 1;
+      bytesWritten += 28 + esc_internal + name_l;
 
 		}
 	}
@@ -248,6 +248,76 @@ int _create_packet_5(unsigned char* p, unsigned char g_id, unsigned char p_id, u
   return last + 1;
 }
 
+int _packet6_helper_process_clients(client_struct** clients, int* n_clients, unsigned char* p_data, int* clients_total_len, unsigned char *xor) { // process all clients
+  unsigned char name_l;
+  unsigned int score, bytesWritten = 0;
+  int esc_internal = 0, esc_total = 0;
+  char username[256];
+
+  for(int i=0; i < MAX_CLIENTS; ++i) {
+		if(clients[i] && clients[i]->has_introduced) {
+      esc_internal = 0;
+			score = clients[i]->score;
+      strcpy(username, clients[i]->username);
+      name_l = strlen(username);
+
+      (*n_clients)++;
+      (*xor) ^= name_l;
+      esc_internal += escape_assign(name_l, &p_data[0 + esc_internal + bytesWritten]); // Length of name (1 byte)
+      esc_internal += process_str(username, xor, &p_data[1 + esc_internal + bytesWritten]); // username (strlen(username) bytes)
+      esc_internal += process_int_lendian(score, &p_data[1 + esc_internal + bytesWritten + name_l], xor); // score (4 bytes)
+
+      esc_total += esc_internal;
+
+      bytesWritten += 5 + esc_internal + name_l;
+		}
+	}
+
+  *clients_total_len = bytesWritten;
+
+  return esc_total; // used only for N_LEN
+}
+
+//    packet[0] = game ID
+//    packet[1] = Receiver's ID
+//    packet[2,3,4,5] = Receiver's score (unsigned int)
+//    packet[6,7] = Number of players (including receiver) (unsigned short int)
+//    packet[8 ... ] = LEADERBOARD DATA (below) ... goes into for loop for each player
+//    for (i=0; i < num of players; i++)
+//       data[0 + prev] = strlen(name) (unsigned char = 1 byte)
+//       data[1 + prev ... 1 + prev + strlen(name)] = username
+//       data[1 + prev + strlen(name) ... 5 + prev + strlen(name)] = score (unsigned int = 4 bytes)
+
+int _create_packet_6(unsigned char* p, unsigned char g_id, client_struct** clients, unsigned char curr_player_id, unsigned int curr_player_score) {
+  unsigned char p_user_data[MAX_PACKET_SIZE];
+  const unsigned char type = 6;
+  unsigned char xor = 0;
+  int esc = 0, c_total_len = 0, client_count = 0;
+  int esc_cl = _packet6_helper_process_clients(clients, &client_count, p_user_data, &c_total_len, &xor); // process all clients
+  const unsigned char N_LEN = 1 + 1 + 4 + 2 + (c_total_len - esc_cl);
+  unsigned int npk = 0;
+
+  // p header
+  int h_size = 11;
+  esc += set_packet_header(type, p, N_LEN, npk, &xor);
+
+  // p data
+  xor ^= g_id;
+  esc += escape_assign(g_id, &p[h_size + esc]); // game id (1 byte)
+  esc += escape_assign(curr_player_id, &p[h_size + esc + 1]); // receiver's (current player's) ID (1 byte)
+  esc += process_int_lendian(curr_player_score, &p[h_size + esc + 2], &xor); // receiver's (current player's) Score (4 bytes)
+  esc += process_short_int_lendian(client_count, &p[h_size + esc + 6], &xor); // number of clients (2 bytes)
+  memcpy(&p[h_size + esc + 8], p_user_data, c_total_len);
+
+  // p footer
+  int last = h_size + esc + 8 + c_total_len;
+  p[last] = xor; // xor
+
+  return last + 1;
+}
+
+
+
 
 int process_packet_0(unsigned char* p_dat, client_struct* client) {
   unsigned char name_l = (unsigned char) p_dat[0];
@@ -341,10 +411,7 @@ int process_packet_2(unsigned char* p_dat, client_struct* client) {
   return 0;
 }
 
-void trash_function(void* arg1, void *arg2, void* arg3, void* arg4, void* arg5) {
-
-}
-
+void trash_function(void* arg1, void *arg2, void* arg3, void* arg4, void* arg5) {}
 
 int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
   unsigned char g_id;
@@ -458,6 +525,22 @@ int process_packet_5(unsigned char* p_dat, int* client_status) {
   return 0;
 }
 
+int process_packet_6(unsigned char* p_dat, int* client_status) {
+  // unsigned char g_id, p_id;
+  // g_id = p_dat[0];
+  // p_id = p_dat[1];
+  //
+  // unsigned int score, time_passed;
+  // score = get_int_from_up_to_4bytes_lendian(&p_dat[2]);
+  // time_passed = get_int_from_up_to_4bytes_lendian(&p_dat[6]);
+  //
+  printf("[OK] Received packet 6. Game ended.\n");// You died. Your score: %d, time passed %d. g_id=%d, p_id=%d\n", score, time_passed, g_id, p_id);
+  //
+  // *client_status = 5;
+
+  return 0;
+}
+
 void process_incoming_packet(unsigned char *p, int size_header, int size_data, client_struct *client, int c_socket, int *client_status, unsigned char *g_id, unsigned char *p_id, int is_server) {
   // is_server = 1 (called function in server), is server = 0 (called function in client)
   int size = size_header + size_data;
@@ -491,6 +574,9 @@ void process_incoming_packet(unsigned char *p, int size_header, int size_data, c
       break;
     case 5:
       if (!is_server) process_result = process_packet_5(&p[size_header], client_status);
+      break;
+    case 6:
+      if (!is_server) process_result = process_packet_6(&p[size_header], client_status);
       break;
     default:
       printf("Invalid packet type. Abandoned.\n");

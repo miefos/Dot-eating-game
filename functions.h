@@ -39,6 +39,9 @@ int _create_packet_2(unsigned char *p, unsigned char g_id, unsigned char p_id, u
 int _create_packet_3(unsigned char *p, unsigned char g_id, client_struct **clients, unsigned short int n_dots, dot **dots, unsigned int time_left);
 int _create_packet_4(unsigned char *p, unsigned char *g_id, unsigned char *p_id, char w, char a, char s, char d);
 int _create_packet_5(unsigned char* p, unsigned char g_id, unsigned char p_id, unsigned int score, unsigned int time_passed);
+int _create_packet_6(unsigned char* p, unsigned char g_id, client_struct** clients, unsigned char curr_player_id, unsigned int curr_player_score);
+
+int _packet6_helper_process_clients(client_struct** clients, int* n_clients, unsigned char* p_data, int* clients_total_len, unsigned char *xor);
 
 int send_packet_1(client_struct *client);
 int process_packet_0(unsigned char *p_dat, client_struct *client);
