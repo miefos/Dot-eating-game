@@ -234,7 +234,7 @@ client_struct* add_client(int client_socket) {
 			client->x = 5; // initial position should be evaluated somehow
 			client->y = 9; // initial position should be evaluated somehow
 			client->size = INIT_SIZE;
-			client->score = 0;
+			client->score = 33; // for testing only - should be 0 always!
 			client->lives = INIT_LIVES;
 			clients[i] = client;
       break;

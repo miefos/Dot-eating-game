@@ -302,7 +302,7 @@ int _create_packet_6(unsigned char* p, unsigned char g_id, client_struct** clien
   esc += set_packet_header(type, p, N_LEN, npk, &xor);
 
   // p data
-  xor ^= g_id;
+  xor ^= g_id; xor^= curr_player_id;
   esc += escape_assign(g_id, &p[h_size + esc]); // game id (1 byte)
   esc += escape_assign(curr_player_id, &p[h_size + esc + 1]); // receiver's (current player's) ID (1 byte)
   esc += process_int_lendian(curr_player_score, &p[h_size + esc + 2], &xor); // receiver's (current player's) Score (4 bytes)
@@ -526,17 +526,35 @@ int process_packet_5(unsigned char* p_dat, int* client_status) {
 }
 
 int process_packet_6(unsigned char* p_dat, int* client_status) {
-  // unsigned char g_id, p_id;
-  // g_id = p_dat[0];
-  // p_id = p_dat[1];
-  //
-  // unsigned int score, time_passed;
-  // score = get_int_from_up_to_4bytes_lendian(&p_dat[2]);
-  // time_passed = get_int_from_up_to_4bytes_lendian(&p_dat[6]);
-  //
-  printf("[OK] Received packet 6. Game ended.\n");// You died. Your score: %d, time passed %d. g_id=%d, p_id=%d\n", score, time_passed, g_id, p_id);
-  //
-  // *client_status = 5;
+  unsigned char g_id, p_id;
+  unsigned short int n_players;
+  g_id = p_dat[0];
+  p_id = p_dat[1];
+
+  unsigned int score;
+  score = get_int_from_up_to_4bytes_lendian(&p_dat[2]); // 4 bytes
+  n_players = get_int_from_up_to_4bytes_lendian(&p_dat[6]); // 2 bytes
+
+  printf("[OK] Received packet 6. GAME ENDED. g_id=%d, p_id=%d, p_score=%d\n", g_id, p_id, score);
+
+  int i;
+  unsigned int bytesRead = 0;
+  printf("==== LEADERBOARD =====\n");
+  for (i = 0; i < n_players; i++) {
+    unsigned char name_l;
+    char username[256] = {0};
+    unsigned int score;
+
+    name_l = p_dat[8 + bytesRead]; // 1 byte
+    memcpy(username, &p_dat[8 + bytesRead + 1], name_l); // name_l bytes
+    score = get_int_from_up_to_4bytes_lendian(&p_dat[8 + bytesRead + 1 + name_l]); // 4 bytes
+
+    bytesRead += 1 + name_l + 4;
+
+    printf("%s has %d points\n", username, score);
+  }
+
+  *client_status = 6;
 
   return 0;
 }
@@ -545,15 +563,15 @@ void process_incoming_packet(unsigned char *p, int size_header, int size_data, c
   // is_server = 1 (called function in server), is server = 0 (called function in client)
   int size = size_header + size_data;
 
+  int type = (int) p[0];
+
   unsigned char checksum = get_checksum(p, size - 1);
   if (p[size-1] == checksum)
     printf("[OK] Checksums are correct.\n");
   else {
-    printf("[WARNING] Packet checksums mismatch :(. Abandoned the packet. In packet %d but in server %d. \n", p[size-1], checksum);
+    printf("[WARNING] Packet number %d: checksums mismatch :(. Abandoned the packet. In packet %d but in server %d. \n", type, p[size-1], checksum);
     return;
   }
-
-  int type = (int) p[0];
 
   int process_result = -1;
   switch (type) {
@@ -689,6 +707,8 @@ int recv_byte (
     }
 
   } else {
+    if (client_status && (*client_status == 5 || *client_status == 6))
+      return -1;
     printf("[WARNING] Error recv. Smth.\n");
     return -1;
   }

@@ -111,3 +111,11 @@
 //       data[1 + prev ... 1 + prev + strlen(name)] = username
 //       data[1 + prev + strlen(name) ... 5 + prev + strlen(name)] = score (unsigned int = 4 bytes)
 //    =========================================================
+//
+// 7) Just some messge. Can be sent to server from client or from server to client.
+//    ================ [7th PACKET DATA CONTENT] ==================
+//    packet[0] = game ID
+//    packet[1] = Player ID
+//    packet[2,3] = strlen(message) (unsigned short int)
+//    packet[4 ... 4 + strlen(message)] = message
+//    =========================================================
