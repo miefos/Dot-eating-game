@@ -12,7 +12,8 @@
 #include "setup.h"
 
 int _create_packet_0(unsigned char* p, char* name, char* color) {
-  unsigned char type = 0, npk = 0;
+  unsigned char type = 0;
+  unsigned int npk = 0;
   unsigned char xor = 0;
   unsigned char name_l = (unsigned char) strlen(name);
   unsigned char N_LEN = name_l + 1 + 6; // 1 - name_l, 6 - color
@@ -36,7 +37,8 @@ int _create_packet_0(unsigned char* p, char* name, char* color) {
 }
 
 int _create_packet_1(unsigned char* p, unsigned char g_id, unsigned char p_id, unsigned int p_init_size, unsigned int x_max, unsigned int y_max, unsigned int time_lim, unsigned int n_lives) {
-  unsigned char type = 1, npk = 0;
+  unsigned char type = 1;
+  unsigned int npk = 0;
   unsigned char xor = 0;
   unsigned char N_LEN = 1 + 1 + 4*5; // 2 times 1 byte, 5 times 4 bytes
   int esc = 0; // escape count
@@ -63,7 +65,8 @@ int _create_packet_1(unsigned char* p, unsigned char g_id, unsigned char p_id, u
 }
 
 int _create_packet_2(unsigned char* p, unsigned char g_id, unsigned char p_id, unsigned char r_char) {
-  unsigned char type = 2, npk = 0, byte3 = 0;
+  unsigned char type = 2, byte3 = 0;
+  unsigned int npk = 0;
   unsigned char xor = 0;
   unsigned char N_LEN = 1 + 1 + 1;
   int esc = 0, ready = 0;
@@ -91,9 +94,6 @@ int _create_packet_2(unsigned char* p, unsigned char g_id, unsigned char p_id, u
 
 
 int _packet3_helper_process_dots(dot** dots, unsigned short int n_dots, unsigned char* p_part, unsigned char* xor) {
-  //    ==== DOT INFORMATION ====
-  //    data[0,1,2,3] = x_location - unsigned int
-  //    data[4,5,6,7] = y_location - unsigned int
   int esc = 0, bytesWritten = 0;
   unsigned int x,y;
 
@@ -116,16 +116,6 @@ int _packet3_helper_process_dots(dot** dots, unsigned short int n_dots, unsigned
 }
 
 int _packet3_helper_process_clients(client_struct** clients, int* n_clients, unsigned char* p_data, int* clients_total_len, unsigned char *xor) {
-  //    ==== PLAYER DATA ====
-  //    data[0] = player ID
-  //    data[1] = strlen(name)
-  //    data[2 ... strlen(name)] = name
-  //    data[2 + strlen(name) ... 5 + strlen(name)] = player's location x (unsigned int)
-  //    data[6 + strlen(name) ... 9 + strlen(name)] = player's location y (unsigned int)
-  //    data[10 + strlen(name) ... 15 + strlen(name)] = color (6 hex digits)
-  //    data[16 + strlen(name) ... 19 + strlen(name)] = player's size (unsigned int)
-  //    data[20 + strlen(name) ... 23 + strlen(name)] = player's score (unsigned int)
-  //    data[24 + strlen(name) ... 27 + strlen(name)] = player' s lives (unsigned int)
   unsigned char ID, name_l;
   unsigned int x, y, size, score, lives, bytesWritten = 0;
   int esc_internal = 0, esc_total = 0;
@@ -168,16 +158,6 @@ int _packet3_helper_process_clients(client_struct** clients, int* n_clients, uns
   return esc_total; // used only for N_LEN
 }
 
-//    ================ [3rd PACKET DATA CONTENT] ==================
-//    packet[0] = game ID
-//    packet[1] = Num of players
-//    P_LEN = len_of_players_data*Num Of players;
-//    packet[2 ... 2 + P_LEN] = PLAYER DATA*
-//    packet[3 + P_LEN ... 4 + P_LEN] = Num of dots (unsigned short int), max 65536
-//    packet[5 + P_LEN ... 5 + P_LEN + 8*Num of dots] = DOT INFORMATION**
-//    packet[5 + P_LEN + 8*Num of dots + 1 ... 5 + P_LEN + 8*Num of dots + 4] = Time left (unsigned int)
-//    =========================================================
-
 int _create_packet_3(unsigned char* p, unsigned char g_id, client_struct** clients, unsigned short int n_dots, dot** dots, unsigned int time_left) {
   unsigned char p_user_data[MAX_PACKET_SIZE];
   const unsigned char type = 3;
@@ -187,7 +167,7 @@ int _create_packet_3(unsigned char* p, unsigned char g_id, client_struct** clien
   const unsigned char N_LEN = (c_total_len - esc_cl) + 1 + 2 + 2 + 8*n_dots + 4;
 
   // should be implemented real
-  unsigned char npk = 0;
+  unsigned int npk = 0;
 
   // p header
   int h_size = 11;
@@ -209,6 +189,38 @@ int _create_packet_3(unsigned char* p, unsigned char g_id, client_struct** clien
   return last + 1;
 }
 
+
+int _create_packet_4(unsigned char *p, unsigned char *g_id, unsigned char *p_id, char w, char a, char s, char d) {
+  // chars w,a,s,d each represents whether key is pressed... 1 - pressed, 0 - not pressed
+  unsigned char type = 4, byte3 = 0;
+  unsigned char xor = 0;
+  unsigned char N_LEN = 1 + 1 + 1;
+  int esc = 0;
+
+  // should be implemented real npk
+  unsigned int npk = 0;
+
+  // p header
+  int h_size = 11;
+  esc += set_packet_header(type, p, N_LEN, npk, &xor);
+
+  // p data
+  xor ^= *g_id; xor ^= *p_id;
+  esc += escape_assign(*g_id, &p[h_size + esc]); // game id
+  esc += escape_assign(*p_id, &p[h_size + esc + 1]); // player id
+  byte3 = byte3 | (w << 3);
+  byte3 = byte3 | (a << 2);
+  byte3 = byte3 | (s << 1);
+  byte3 = byte3 | d;
+  xor ^= byte3;
+  esc += escape_assign(byte3, &p[h_size+esc+2]);
+
+  // p footer
+  int last = h_size+esc+3;
+  p[last] = xor; // xor
+
+  return last + 1;
+}
 
 
 
@@ -249,10 +261,10 @@ int process_packet_0(unsigned char* p_dat, client_struct* client) {
   return 0;
 }
 
-int process_packet_1(unsigned char* p_dat, int c_socket, int *client_status) {
+int process_packet_1(unsigned char* p_dat, int c_socket, int *client_status, unsigned char* g_id, unsigned char* p_id) {
   *client_status = 1;
-  unsigned char g_id = p_dat[0];
-  unsigned char p_id = p_dat[1];
+  *g_id = p_dat[0];
+  *p_id = p_dat[1];
   unsigned int p_init_size = get_int_from_up_to_4bytes_lendian(&p_dat[2]);
   unsigned int max_x = get_int_from_up_to_4bytes_lendian(&p_dat[6]);
   unsigned int max_y = get_int_from_up_to_4bytes_lendian(&p_dat[10]);
@@ -260,7 +272,7 @@ int process_packet_1(unsigned char* p_dat, int c_socket, int *client_status) {
   unsigned int num_of_lives = get_int_from_up_to_4bytes_lendian(&p_dat[18]);
 
   printf("[OK] Got packet 1. Game ID = %d, Player ID = %d, p_init_size = %d, field size (%d, %d), time %d, lives %d\n",
-          g_id, p_id, p_init_size, max_x, max_y, time_limit, num_of_lives);
+          *g_id, *p_id, p_init_size, max_x, max_y, time_limit, num_of_lives);
 
   // wait for user input to send ready message
   *client_status = 2;
@@ -275,13 +287,13 @@ int process_packet_1(unsigned char* p_dat, int c_socket, int *client_status) {
 
   // sending packet 2
   unsigned char p[MAX_PACKET_SIZE];
-  int packet_size = _create_packet_2(p, g_id, p_id, ready);
+  int packet_size = _create_packet_2(p, *g_id, *p_id, ready);
 
   if (send_prepared_packet(p, packet_size, c_socket) < 0) {
-    printf("[ERROR] Packet 1 could not be sent.\n");
+    printf("[ERROR] Packet 2 could not be sent.\n");
       return -1;
   } else {
-    printf("[OK] Packet 1 sent successfully.\n");
+    printf("[OK] Packet 2 sent successfully.\n");
   }
 
   *client_status = 4;
@@ -323,6 +335,7 @@ int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
   n_players = get_int_from_up_to_4bytes_lendian(&p[1]); // 2 byte int
 
   // get PLAYER DATA
+  printf("[OK] The following clients were received by packet3: \n");
   for(int i=0; i < n_players; ++i) {
     // malloc client
     client_struct* client = (client_struct *) malloc(sizeof(client_struct));
@@ -343,11 +356,10 @@ int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
 
     clients[i] = client;
 
-    printf("[OK] New client received. %s (id=%d, color=%s), x=%d, y=%d, size=%d, score=%d, lives=%d \n",
-      client->username, client->ID, client->color, client->x, client->y, client->size, client->score, client->lives);
+    printf("Client %d: %s (id=%d, #%s), x=%d, y=%d, size=%d, score=%d, lives=%d \n",
+      i+1, client->username, client->ID, client->color, client->x, client->y, client->size, client->score, client->lives);
 
       total_client_len += 30 + name_l - 3 + 1;
-
   }
 
   n_dots = get_int_from_up_to_4bytes_lendian(&p[3 + total_client_len]);
@@ -355,7 +367,7 @@ int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
 
   // get DOT DATA
   for(int i=0; i < n_dots; ++i) {
-    // malloc client
+    // malloc dot
     dot* somedot = (dot *) malloc(sizeof(dot));
     if (somedot == NULL) {
       printf("[WARNING] Malloc did not work. Cannot create dot in packet receiving.\n");
@@ -366,26 +378,54 @@ int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
     somedot->y = get_int_from_up_to_4bytes_lendian(&p[3 + total_client_len + 2 + i*8 + 4]);
 
     dots[i] = somedot;
+  }
 
-    printf("[OK] New dot received: x = %d, y = %d\n", somedot->x, somedot->y);
+  // print DOT DATA
+  printf("[OK] Got the following dots: ");
+  for(int i=0; i < n_dots; ++i) {
+    if (i == n_dots - 1) printf("[%d, %d]\n", dots[i]->x, dots[i]->y);
+    else printf("[%d, %d], ", dots[i]->x, dots[i]->y);
   }
 
   time_left = get_int_from_up_to_4bytes_lendian(&p[3 + total_client_len + 2 + n_dots*8]);
 
-  printf("[OK] time left: %d", time_left);
+  printf("[OK] time left: %d\n", time_left);
 
   trash_function(dots, clients, &g_id, username, color); // used to disable warnings not useful
 
   return 0;
 }
 
-void process_incoming_packet(unsigned char *p, int size_header, int size_data, client_struct* client, int c_socket, int *client_status, int is_server) {
+int process_packet_4(unsigned char* p_dat, client_struct* client) {
+  unsigned char g_id, p_id, byte3;
+  char w, a, s, d;
+
+
+  printf("RECEIVED THIS!!!\n\n");
+  print_bytes(p_dat, 3);
+  char w_pos = 3, a_pos = 2, s_pos = 1, d_pos = 0; // bitNumber, see get_bit
+  g_id = p_dat[0];
+  p_id = p_dat[1];
+  byte3 = p_dat[2];
+  w = get_bit(byte3, w_pos);
+  a = get_bit(byte3, a_pos);
+  s = get_bit(byte3, s_pos);
+  d = get_bit(byte3, d_pos);
+
+  printf("Received packet 4. g_id = %d, p_id = %d, pressed(w,a,s,d)=(%d,%d,%d,%d)\n", g_id, p_id, w, a, s, d);
+
+  // some game logic should come here...
+
+  return 0;
+}
+
+void process_incoming_packet(unsigned char *p, int size_header, int size_data, client_struct *client, int c_socket, int *client_status, unsigned char *g_id, unsigned char *p_id, int is_server) {
   // is_server = 1 (called function in server), is server = 0 (called function in client)
   int size = size_header + size_data;
 
   unsigned char checksum = get_checksum(p, size - 1);
   if (p[size-1] == checksum)
-    printf("[OK] Checksums are correct. From packet is %d, from server is %d\n", p[size-1], checksum);
+    printf("[OK] Checksums are correct.\n");
   else {
     printf("[WARNING] Packet checksums mismatch :(. Abandoned the packet. In packet %d but in server %d. \n", p[size-1], checksum);
     return;
@@ -399,13 +439,16 @@ void process_incoming_packet(unsigned char *p, int size_header, int size_data, c
       if (is_server) process_result = process_packet_0(&p[size_header], client);
       break;
     case 1:
-      if (!is_server && size_data == 23) process_result = process_packet_1(&p[size_header], c_socket, client_status);
+      if (!is_server && size_data == 23) process_result = process_packet_1(&p[size_header], c_socket, client_status, g_id, p_id);
       break;
     case 2:
       if (is_server) process_result = process_packet_2(&p[size_header], client);
       break;
     case 3:
       if (!is_server) process_result = process_packet_3(&p[size_header], c_socket, client_status);
+      break;
+    case 4:
+      if (is_server) process_result = process_packet_4(&p[size_header], client);
       break;
     default:
       printf("Invalid packet type. Abandoned.\n");
@@ -426,9 +469,11 @@ int recv_byte (
   int *current_packet_data_size,
   int *packet_status,
   int is_server,
-  client_struct* client,
+  client_struct *client,
   int client_socket,
-  int *client_status
+  int *client_status,
+  unsigned char *g_id,
+  unsigned char *p_id
   ) {
 
   int receive, socket = client_socket;
@@ -445,7 +490,7 @@ int recv_byte (
 
   if (*packet_cursor == packet_header_size_excl_div + *current_packet_data_size + 1) {
     // printf("[OK] Reached end of packet reading... Current cursor pos. %d\n", *packet_cursor);
-    process_incoming_packet(packet_in, packet_header_size_excl_div, *current_packet_data_size + 1, client, socket, client_status, is_server); // TODO make seperate thread or smth so it can continue reading packets...
+    process_incoming_packet(packet_in, packet_header_size_excl_div, *current_packet_data_size + 1, client, socket, client_status, g_id, p_id, is_server); // TODO make seperate thread or smth so it can continue reading packets...
     *packet_status = 0;
     *current_packet_data_size = 0;
     *packet_cursor = 0;

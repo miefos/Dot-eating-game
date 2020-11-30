@@ -124,3 +124,9 @@ void print_bytes(void* packet, int count) {
     );
   }
 }
+
+// bitNumber should be from left side
+// Ex: (0000 0100 to get 1 we should indicate bitNumber 2)
+char get_bit(unsigned char byte, char bitNumber) {
+  return (byte >> bitNumber) & 1; // 0 or 1
+}

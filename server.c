@@ -13,6 +13,7 @@
 #include "util_functions.h"
 #include "setup.h"
 
+
 int client_count = 0;
 int ID = 0;
 client_struct* clients[MAX_CLIENTS];
@@ -85,7 +86,7 @@ void* process_client(void* arg){
 	while(1){
     if (client_leave_flag) break;
 
-    if ((result = recv_byte(packet_in, &packet_cursor, &current_packet_data_size, &packet_status, 1, client, -1, NULL)) > 0) {
+    if ((result = recv_byte(packet_in, &packet_cursor, &current_packet_data_size, &packet_status, 1, client, -1, NULL, NULL, NULL)) > 0) {
         // everything done in recv_byte already...
 		} else if (result < 0){ // disconnection or error
       printf("[WARNING] From %s could not receive packet.\n", client->username);
@@ -244,7 +245,7 @@ void send_packet_to_all(unsigned char *p, int p_size) {
 				if (send_prepared_packet(p, p_size, clients[i]->socket) < 0) {
 					printf("[WARNING] Packet could not be sent.....\n");
 				} else {
-					printf("[OK] Packet sent successfully.......\n");
+					// printf("[OK] Packet sent successfully.......\n");
 				}
     }
 	}

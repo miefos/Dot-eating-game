@@ -13,11 +13,15 @@
 #include "setup.h"
 
 int leave_flag = 0;
-// 0 - client not set
-// 1 - received packet 1, client set
-// 2 - client has sent ready status to server
-// 3 ...
+// client status information...
+// 0 - initial
+// 1 - received approval from server (1st packet)
+// 2 - after 1st packet waiting for user input in send_loop to set ready status
+// 3 - got input, ready status set to 3 by send_loop
+// 4 - ready status sent to server (2rd packet sent)
+// 5 - CURRENTLY NOWHERE CAN PUT TO 5
 int client_status = 0;
+unsigned char g_id = 0, p_id = 0;
 
 void set_leave_flag() {
     leave_flag = 1;
@@ -29,11 +33,22 @@ void* send_loop(void* arg) {
 
   while(1) {
     if ((message[0] =  fgetc(stdin)) != '\n') { // do not send newline
-      if (client_status == 2) client_status = 3;
-      else if (client_status == 0) send(*client_socket, message, 1, 0);
-      else if (client_status == 1) send(*client_socket, message, 1, 0);
-      else if (client_status == 4) send(*client_socket, message, 1, 0);
-      else if (client_status == 5) send(*client_socket, message, 1, 0);
+      if (client_status == 2) client_status = 3; // set client_status to 3
+      else if (client_status == 0) send(*client_socket, message, 1, 0); // just send
+      else if (client_status == 1) send(*client_socket, message, 1, 0); // just send
+      else if (client_status == 4) { // getchar for packet 4 updates
+        char w = 0, a = 0, s = 0, d = 0;
+        unsigned char p[MAX_PACKET_SIZE];
+        // somehow should determine which keys pressed ... currently hard-coded.
+        // perhaps also some logic should be changed so that this not come only after fgetc
+        w = 1; a = 0; s = 1; d = 1; // 1 - pressed, 0 - not pressed
+        int p_size = _create_packet_4(p, &g_id, &p_id, w, a, s, d);
+        if (send_prepared_packet(p, p_size, *client_socket) < 0) {
+          printf("[ERROR] Packet 4 could not be sent.\n");
+        } else {
+          printf("[OK] Packet 4 sent successfully.\n");
+        }
+      }
     }
   }
 
@@ -54,7 +69,7 @@ void* receive_loop(void* arg) {
 	while(1){
     if (leave_flag) break;
 
-    if ((result = recv_byte(packet_in, &packet_cursor, &packet_data_size, &packet_status, 0, NULL, *client_socket, &client_status)) > 0) {
+    if ((result = recv_byte(packet_in, &packet_cursor, &packet_data_size, &packet_status, 0, NULL, *client_socket, &client_status, &g_id, &p_id)) > 0) {
         // everything done in recv_byte already...
 		} else if (result < 0){ // disconnection or error
       printf("[WARNING] Could not receive package.\n");

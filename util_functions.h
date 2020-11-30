@@ -8,3 +8,4 @@ int escape_assign(unsigned char num, unsigned char* packet);
 char printable_char(char c);
 void print_bytes(void* packet, int count);
 unsigned char get_checksum(unsigned char* arr, int size);
+char get_bit(unsigned char byte, char bitNumber);
