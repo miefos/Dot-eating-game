@@ -156,6 +156,8 @@ int gameloop() {
 	// try packet 3
 	unsigned char p[MAX_PACKET_SIZE];
 	unsigned char g_id = 211;
+	int time_to_sleep = 5; // secs
+	int drop_player_after = 12; // secs
   while (1) {
     if (leave_flag) {
       printf("Leave flag detected in gameloop.\n");
@@ -167,7 +169,27 @@ int gameloop() {
 		send_packet_to_all(p, packet_size); // should have return val...
 
 		printf("[OK] Gameloop update sent...\n");
-    sleep(5);
+
+		for(int i=0; i < MAX_CLIENTS; ++i) {
+			if(clients[i] && clients[i]->ready) {
+				clients[i]->FOR_TESTING_ONLY += time_to_sleep; // increase by 5 secs game time
+				printf("%s time is %d, die when %d >reached\n", clients[i]->username, clients[i]->FOR_TESTING_ONLY, drop_player_after);
+				if (clients[i]->FOR_TESTING_ONLY > drop_player_after) {
+					int score = 159, time_left = 92; // HARDCODED, should not be
+					int p_size = _create_packet_5(p, g_id, clients[i]->ID, score, time_left);
+					if (send_prepared_packet(p, p_size, clients[i]->socket) < 0) {
+						printf("[ERROR] Packet 5 could not be sent.\n");
+					} else {
+						printf("[OK] Packet 5 sent successfully.\n");
+					}
+
+
+				}
+			}
+		}
+
+
+    sleep(time_to_sleep);
   }
 
   // wait for packets to be sent etc

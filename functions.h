@@ -16,7 +16,7 @@ typedef struct {
   int socket;
   unsigned char ID;
   unsigned char ready;
-  unsigned char connected; // 0 - this client is not connected, 1 - this client is connected
+  // unsigned char connected; // 0 - this client is not connected, 1 - this client is connected
   unsigned char has_introduced; // meaning the 0th packet is received (at first 0, when receives set it to 1)
   char username[256];
   char color[7];
@@ -25,6 +25,7 @@ typedef struct {
   unsigned int size;
   unsigned int score;
   unsigned int lives;
+  unsigned int FOR_TESTING_ONLY;
 } client_struct;
 
 typedef struct {
@@ -37,6 +38,8 @@ int _create_packet_1(unsigned char *p, unsigned char g_id, unsigned char p_id, u
 int _create_packet_2(unsigned char *p, unsigned char g_id, unsigned char p_id, unsigned char r_char);
 int _create_packet_3(unsigned char *p, unsigned char g_id, client_struct **clients, unsigned short int n_dots, dot **dots, unsigned int time_left);
 int _create_packet_4(unsigned char *p, unsigned char *g_id, unsigned char *p_id, char w, char a, char s, char d);
+int _create_packet_5(unsigned char* p, unsigned char g_id, unsigned char p_id, unsigned int score, unsigned int time_passed);
+
 int send_packet_1(client_struct *client);
 int process_packet_0(unsigned char *p_dat, client_struct *client);
 int process_packet_1(unsigned char *p_dat, int c_socket, int *client_status, unsigned char *g_id, unsigned char *p_id);

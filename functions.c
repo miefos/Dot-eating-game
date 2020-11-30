@@ -93,7 +93,7 @@ int _create_packet_2(unsigned char* p, unsigned char g_id, unsigned char p_id, u
 }
 
 
-int _packet3_helper_process_dots(dot** dots, unsigned short int n_dots, unsigned char* p_part, unsigned char* xor) {
+int _packet3_helper_process_dots(dot** dots, unsigned short int n_dots, unsigned char* p_part, unsigned char* xor){
   int esc = 0, bytesWritten = 0;
   unsigned int x,y;
 
@@ -223,6 +223,31 @@ int _create_packet_4(unsigned char *p, unsigned char *g_id, unsigned char *p_id,
 }
 
 
+int _create_packet_5(unsigned char* p, unsigned char g_id, unsigned char p_id, unsigned int score, unsigned int time_passed) {
+  unsigned char type = 5;
+  unsigned int npk = 0;
+  unsigned char xor = 0;
+  unsigned char N_LEN = 1 + 1 + 4 + 4;
+  int esc = 0;
+
+  // p header
+  int h_size = 11;
+  esc += set_packet_header(type, p, N_LEN, npk, &xor);
+
+  // p data
+  xor ^= g_id; xor ^= p_id;
+  esc += escape_assign(g_id, &p[h_size + esc]); // game id
+  esc += escape_assign(p_id, &p[h_size + esc + 1]); // player id
+  esc += process_int_lendian(score, &p[h_size + esc + 2], &xor); // score
+  esc += process_int_lendian(time_passed, &p[h_size + esc + 6], &xor); // score
+
+  // p footer
+  int last = h_size+esc+10;
+  p[last] = xor; // xor
+
+  return last + 1;
+}
+
 
 int process_packet_0(unsigned char* p_dat, client_struct* client) {
   unsigned char name_l = (unsigned char) p_dat[0];
@@ -307,7 +332,8 @@ int process_packet_2(unsigned char* p_dat, client_struct* client) {
   g_id = p_dat[0];
   p_id = p_dat[1];
   byte3 = p_dat[2];
-  ready = (byte3 >> 2);
+  int ready_bitNumber = 2; // from left
+  ready = get_bit(byte3, ready_bitNumber);
 
   printf("Received packet 2. g_id = %d, p_id = %d, byte 3 = %d, ready = %d\n", g_id, p_id, byte3, ready);
 
@@ -400,9 +426,6 @@ int process_packet_4(unsigned char* p_dat, client_struct* client) {
   unsigned char g_id, p_id, byte3;
   char w, a, s, d;
 
-
-  printf("RECEIVED THIS!!!\n\n");
-  print_bytes(p_dat, 3);
   char w_pos = 3, a_pos = 2, s_pos = 1, d_pos = 0; // bitNumber, see get_bit
   g_id = p_dat[0];
   p_id = p_dat[1];
@@ -415,6 +438,22 @@ int process_packet_4(unsigned char* p_dat, client_struct* client) {
   printf("Received packet 4. g_id = %d, p_id = %d, pressed(w,a,s,d)=(%d,%d,%d,%d)\n", g_id, p_id, w, a, s, d);
 
   // some game logic should come here...
+
+  return 0;
+}
+
+int process_packet_5(unsigned char* p_dat, int* client_status) {
+  unsigned char g_id, p_id;
+  g_id = p_dat[0];
+  p_id = p_dat[1];
+
+  unsigned int score, time_passed;
+  score = get_int_from_up_to_4bytes_lendian(&p_dat[2]);
+  time_passed = get_int_from_up_to_4bytes_lendian(&p_dat[6]);
+
+  printf("[OK] Received packet 5. You died. Your score: %d, time passed %d. g_id=%d, p_id=%d\n", score, time_passed, g_id, p_id);
+
+  *client_status = 5;
 
   return 0;
 }
@@ -449,6 +488,9 @@ void process_incoming_packet(unsigned char *p, int size_header, int size_data, c
       break;
     case 4:
       if (is_server) process_result = process_packet_4(&p[size_header], client);
+      break;
+    case 5:
+      if (!is_server) process_result = process_packet_5(&p[size_header], client_status);
       break;
     default:
       printf("Invalid packet type. Abandoned.\n");

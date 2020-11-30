@@ -19,7 +19,8 @@ int leave_flag = 0;
 // 2 - after 1st packet waiting for user input in send_loop to set ready status
 // 3 - got input, ready status set to 3 by send_loop
 // 4 - ready status sent to server (2rd packet sent)
-// 5 - CURRENTLY NOWHERE CAN PUT TO 5
+// 5 - died (received packet 5)
+// 6 - CURRENTLY NOWHERE CAN PUT TO 6
 int client_status = 0;
 unsigned char g_id = 0, p_id = 0;
 
@@ -67,6 +68,7 @@ void* receive_loop(void* arg) {
   int* client_socket = (int *) arg;
 
 	while(1){
+    if (client_status == 5) set_leave_flag(); // died :(
     if (leave_flag) break;
 
     if ((result = recv_byte(packet_in, &packet_cursor, &packet_data_size, &packet_status, 0, NULL, *client_socket, &client_status, &g_id, &p_id)) > 0) {
