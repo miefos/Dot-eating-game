@@ -374,7 +374,7 @@ int process_packet_0(unsigned char* p_dat, client_struct* client) {
 }
 
 int process_packet_1(unsigned char* p_dat, int c_socket, int *client_status, unsigned char* g_id, unsigned char* p_id) {
-  *client_status = 1;
+  *client_status = 4;
   *g_id = p_dat[0];
   *p_id = p_dat[1];
   unsigned int p_init_size = get_int_from_4bytes_lendian(&p_dat[2]); // 4 bytes
@@ -387,11 +387,11 @@ int process_packet_1(unsigned char* p_dat, int c_socket, int *client_status, uns
           *g_id, *p_id, p_init_size, max_x, max_y, time_limit, num_of_lives);
 
   // wait for user input to send ready message
-  *client_status = 2;
+  *client_status = 5;
   printf("Write anything to send ready message:\n");
   // fgetc in send thread. It will change client_status to 3 when input received
   // if current client status is 2.
-  while (*client_status != 3) {
+  while (*client_status != 6) {
     sleep(1);
   }
 
@@ -408,7 +408,7 @@ int process_packet_1(unsigned char* p_dat, int c_socket, int *client_status, uns
     printf("[OK] Packet 2 sent successfully.\n");
   }
 
-  *client_status = 4;
+  *client_status = 7;
 
   return 0;
 }
@@ -537,7 +537,7 @@ int process_packet_5(unsigned char* p_dat, int* client_status) {
 
   printf("[OK] Received packet 5. You died. Your score: %d, time passed %d. g_id=%d, p_id=%d\n", score, time_passed, g_id, p_id);
 
-  *client_status = 5;
+  *client_status = 8;
 
   return 0;
 }
@@ -571,7 +571,7 @@ int process_packet_6(unsigned char* p_dat, int* client_status) {
     printf("%s has %d points\n", username, score);
   }
 
-  *client_status = 6;
+  *client_status = 9;
 
   return 0;
 }
@@ -745,7 +745,7 @@ int recv_byte (
     }
 
   } else {
-    if (client_status && (*client_status == 5 || *client_status == 6))
+    if (client_status && (*client_status == 8 || *client_status == 9))
       return -1;
     printf("[WARNING] Error recv. Smth.\n");
     return -1;

@@ -9,9 +9,15 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include "raylib.h"
 #include "functions.h"
 #include "util_functions.h"
 #include "setup.h"
+
+// still to do...
+// packet 6 / 5 remove client
+// add 00 at the end of packet?
+// check that pcket 6 should contain all members and do not exclude current member... etc
 
 
 int client_count = 0;
