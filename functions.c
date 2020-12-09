@@ -32,8 +32,10 @@ int _create_packet_0(unsigned char* p, char* name, char* color) {
   /* p footer */
   int last = h_size + 1 + name_l + esc + 6;
   p[last] = xor; /* xor */
+  p[last+1] = 0;
+  p[last+2] = 0;
 
-  return last + 1;
+  return last + 3;
 }
 
 int _create_packet_1(unsigned char* p, unsigned char g_id, unsigned char p_id, unsigned int p_init_size, unsigned int x_max, unsigned int y_max, unsigned int time_lim, unsigned int n_lives) {
@@ -60,8 +62,10 @@ int _create_packet_1(unsigned char* p, unsigned char g_id, unsigned char p_id, u
   /* p footer */
   int last = h_size + esc + 22;
   p[last] = xor; /* xor */
+  p[last+1] = 0;
+  p[last+2] = 0;
 
-  return last + 1;
+  return last + 3;
 }
 
 int _create_packet_2(unsigned char* p, unsigned char g_id, unsigned char p_id, unsigned char r_char) {
@@ -88,8 +92,10 @@ int _create_packet_2(unsigned char* p, unsigned char g_id, unsigned char p_id, u
   /* p footer */
   int last = h_size+esc+3;
   p[last] = xor; /* xor */
+  p[last+1] = 0;
+  p[last+2] = 0;
 
-  return last + 1;
+  return last + 3;
 }
 
 
@@ -187,8 +193,10 @@ int _create_packet_3(unsigned char* p, unsigned char g_id, client_struct** clien
   /* p footer */
   int last = h_size + esc + 3 + c_total_len + 2 + n_dots*8 + 4;
   p[last] = xor; /* xor */
+  p[last+1] = 0;
+  p[last+2] = 0;
 
-  return last + 1;
+  return last + 3;
 }
 
 
@@ -220,8 +228,10 @@ int _create_packet_4(unsigned char *p, unsigned char *g_id, unsigned char *p_id,
   /* p footer */
   int last = h_size+esc+3;
   p[last] = xor; /* xor */
+  p[last+1] = 0;
+  p[last+2] = 0;
 
-  return last + 1;
+  return last + 3;
 }
 
 
@@ -246,8 +256,10 @@ int _create_packet_5(unsigned char* p, unsigned char g_id, unsigned char p_id, u
   /* p footer */
   int last = h_size+esc+10;
   p[last] = xor; /* xor */
+  p[last+1] = 0;
+  p[last+2] = 0;
 
-  return last + 1;
+  return last + 3;
 }
 
 int _packet6_helper_process_clients(client_struct** clients, int* n_clients, unsigned char* p_data, int* clients_total_len, unsigned char *xor) { /* process all clients */
@@ -305,8 +317,10 @@ int _create_packet_6(unsigned char* p, unsigned char g_id, client_struct** clien
   /* p footer */
   int last = h_size + esc + 8 + c_total_len;
   p[last] = xor; /* xor */
+  p[last+1] = 0;
+  p[last+2] = 0;
 
-  return last + 1;
+  return last + 3;
 }
 
 int _create_packet_7(unsigned char* p, unsigned char g_id, unsigned char p_id, char* message) {
@@ -335,8 +349,10 @@ int _create_packet_7(unsigned char* p, unsigned char g_id, unsigned char p_id, c
   /* p footer */
   int last = h_size + esc + 4 + message_l;
   p[last] = xor; /* xor */
+  p[last+1] = 0;
+  p[last+2] = 0;
 
-  return last + 1;
+  return last + 3;
 }
 
 int process_packet_0(unsigned char* p_dat, client_struct* client) {
@@ -681,6 +697,33 @@ int recv_byte (
   }
 
   if (*packet_cursor == packet_header_size_excl_div + *current_packet_data_size + 1) {
+    /* should end with 00, check it */
+    receive = recv(socket, rec_byte, 1, 0);
+  	if (receive > 0) { /* received byte */
+      if (rec_byte[0] == 0) { /* divisor */
+        /* print_one_byte(rec_byte[0]); */
+        receive = recv(socket, rec_byte, 1, 0);
+        if (receive > 0) { /* received successfully */
+          /* print_one_byte(rec_byte[0]); */
+          if (rec_byte[0] == 0) { /* new packet */
+          } else {
+            printf("[WARNING] Packet did not end with 00\n");
+            return -1;
+          }
+        } else {
+          printf("[WARNING] Errr receiving ending 00\n");
+          return -1;
+        }
+      } else {
+        printf("[WARNING] Packet did not end with 00\n");
+        return -1;
+      }
+    } else {
+      printf("[WARNING] Err receiving ending 00\n");
+      return -1;
+    }
+
+
     /* printf("[OK] Reached end of packet reading... Current cursor pos. %d\n", *packet_cursor); */
     process_incoming_packet(packet_in, packet_header_size_excl_div, *current_packet_data_size + 1, client, socket, client_status, g_id, p_id, is_server); /* TODO make seperate thread or smth so it can continue reading packets... */
     *packet_status = 0;
