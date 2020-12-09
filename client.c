@@ -8,7 +8,8 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/mman.h>
-#include "raylib.h" // https://github.com/raysan5/raylib/wiki/Working-on-GNU-Linux
+#include <signal.h>
+#include "raylib.h" /* https://github.com/raysan5/raylib/wiki/Working-on-GNU-Linux */
 #include "functions.h"
 #include "util_functions.h"
 #include "setup.h"
@@ -17,19 +18,20 @@
 #define MAX_COLOR_CHARS 6
 #define MAX_CHARS_IN_TEXTBOX 15
 
+client_struct* client;
 int leave_flag = 0;
-// client status information...
-// 0 - initial
-// 1 - username set
-// 2 - color set
-// 3 - packet 0 sent
-// 4 - received approval from server (1st packet)
-// 5 - after 1st packet waiting for user input in send_loop to set ready status
-// 6 - got input, ready status set to 3 by send_loop
-// 7 - ready status sent to server (2rd packet sent)
-// 8 - game lost(died) (received packet 5)
-// 9 - Game ended (received packet 6)
-// 10 - CURRENTLY NOWHERE CAN PUT TO 10
+/* client status information... */
+/* 0 - initial */
+/* 1 - username set */
+/* 2 - color set */
+/* 3 - packet 0 sent */
+/* 4 - received approval from server (1st packet) */
+/* 5 - after 1st packet waiting for user input in send_loop to set ready status */
+/* 6 - got input, ready status set to 3 by send_loop */
+/* 7 - ready status sent to server (2rd packet sent) */
+/* 8 - game lost(died) (received packet 5) */
+/* 9 - Game ended (received packet 6) */
+/* 10 - CURRENTLY NOWHERE CAN PUT TO 10 */
 int client_status = 0;
 unsigned char g_id = 0, p_id = 0;
 
@@ -39,41 +41,43 @@ void set_leave_flag() {
 
 void* send_loop(void* arg) {
 	int* client_socket = (int *) arg;
-  char message[1];
 
   while(1) {
-    if ((message[0] =  fgetc(stdin)) != '\n') { // do not send newline
-      if (client_status == 5) client_status = 6; // change just when char input received
-      else if (client_status == 2) {
-        // Send 0th packet
-        int packet_size = _create_packet_0(p, name, color);
-        send_prepared_packet(p, packet_size, c_socket);
-        client_status = 3;
+    if (client_status == 2) {
+      unsigned char p[MAX_PACKET_SIZE];
+
+      /* Send 0th packet */
+      int packet_size = _create_packet_0(p, client->username, client->color);
+      if (send_prepared_packet(p, packet_size, *client_socket) < 0) {
+        printf("[ERROR] 0th packet could not be sent.\n");
+      } else {
+        printf("[OK] 0th packet sent successfully.\n");
       }
-      else if (client_status == 3) send(*client_socket, message, 1, 0); // just send
-      else if (client_status == 4) send(*client_socket, message, 1, 0); // just send
-      else if (client_status == 5) { // getchar for packet 4 updates
-        unsigned char p[MAX_PACKET_SIZE];
+      client_status = 3;
+    }
+    else if (client_status == 8) { /* getchar for packet 4 updates */
+      unsigned char p[MAX_PACKET_SIZE];
 
-        int p_size1 =  _create_packet_7(p, g_id, p_id, "I decided to send you an update about my keypresses.");
-        if (send_prepared_packet(p, p_size1, *client_socket) < 0) {
-          printf("[ERROR] Packet 7 could not be sent.\n");
-        } else {
-          printf("[OK] Packet 7 sent successfully.\n");
-        }
+      /* send 7th packet */
+      int p_size1 =  _create_packet_7(p, g_id, p_id, "I decided to send you an update about my keypresses.");
+      if (send_prepared_packet(p, p_size1, *client_socket) < 0) {
+        printf("[ERROR] Packet 7 could not be sent.\n");
+      } else {
+        printf("[OK] Packet 7 sent successfully.\n");
+      }
 
-        char w = 0, a = 0, s = 0, d = 0;
-        // somehow should determine which keys pressed ... currently hard-coded.
-        // perhaps also some logic should be changed so that this not come only after fgetc
-        w = 1; a = 0; s = 1; d = 1; // 1 - pressed, 0 - not pressed
-        int p_size = _create_packet_4(p, &g_id, &p_id, w, a, s, d);
-        if (send_prepared_packet(p, p_size, *client_socket) < 0) {
-          printf("[ERROR] Packet 4 could not be sent.\n");
-        } else {
-          printf("[OK] Packet 4 sent successfully.\n");
-        }
+      char w = 0, a = 0, s = 0, d = 0;
+      /* somehow should determine which keys pressed ... currently hard-coded. */
+      /* perhaps also some logic should be changed so that this not come only after fgetc */
+      w = 1; a = 0; s = 1; d = 1; /* 1 - pressed, 0 - not pressed */
+      int p_size = _create_packet_4(p, &g_id, &p_id, w, a, s, d);
+      if (send_prepared_packet(p, p_size, *client_socket) < 0) {
+        printf("[ERROR] Packet 4 could not be sent.\n");
+      } else {
+        printf("[OK] Packet 4 sent successfully.\n");
       }
     }
+    sleep(0.1); /* send packet each 0.1s */
   }
 
   return NULL;
@@ -83,9 +87,9 @@ void* receive_loop(void* arg) {
 
   unsigned char packet_in[MAX_PACKET_SIZE];
   int result;
-  // 0 = no packet, 1 = packet started, 2 = packet started, have size
+  /* 0 = no packet, 1 = packet started, 2 = packet started, have size */
   int packet_status = 0;
-  int packet_cursor = 0; // keeps track which packet_in index is set last
+  int packet_cursor = 0; /* keeps track which packet_in index is set last */
   int packet_data_size = 0;
 
   int* client_socket = (int *) arg;
@@ -93,14 +97,14 @@ void* receive_loop(void* arg) {
 	while(1){
     if (leave_flag) break;
     result = recv_byte(packet_in, &packet_cursor, &packet_data_size, &packet_status, 0, NULL, *client_socket, &client_status, &g_id, &p_id);
-    if (client_status == 8 || client_status == 9) { set_leave_flag(); continue; } // died :(
+    if (client_status == 8 || client_status == 9) { set_leave_flag(); continue; } /* died :( */
 
     if (result > 0) {
-        // everything done in recv_byte already...
-		} else if (result < 0){ // disconnection or error
+        /* everything done in recv_byte already... */
+		} else if (result < 0){ /* disconnection or error */
       printf("[WARNING] Could not receive package.\n");
       set_leave_flag();
-		} else { // receive == 0
+		} else { /* receive == 0 */
       printf("Recv failed. Leave flag set.\n");
       set_leave_flag();
     }
@@ -111,7 +115,7 @@ void* receive_loop(void* arg) {
 }
 
 void drawUnderscoreDelMessage(int letterCount, int client_status, Rectangle textBox, char *name, char *color, int font_size, int showFromPosition, int framesCounter) {
-    // draw blinking underscore or message to del chars
+    /* draw blinking underscore or message to del chars */
     if ((letterCount < MAX_USERNAME_CHARS && client_status == 0) || (letterCount < MAX_COLOR_CHARS && client_status == 1)) {
         int chars_length = 0;
         if (client_status == 0){
@@ -126,26 +130,33 @@ void drawUnderscoreDelMessage(int letterCount, int client_status, Rectangle text
     else if (client_status < 2) DrawText("Press BACKSPACE to delete chars...", 230, 300, 20, GRAY);
 }
 
-int main(int argc, char **argv){
-  unsigned char p[MAX_PACKET_SIZE];
-  // unsigned char data[MAX_PACKET_SIZE];
+/* should check between packet 5 / 6 for keypress.. */
 
-  // catch SIGINT (Interruption, e.g., ctrl+c)
+int main(int argc, char **argv){
+  /*unsigned char p[MAX_PACKET_SIZE]; */
+  /* unsigned char data[MAX_PACKET_SIZE]; */
+
+  client = (client_struct*) malloc(sizeof(client_struct));
+  if (client == NULL) {
+    printf("[ERROR] Cannot malloc client.\n");
+    return -1;
+  }
+
+  /* catch SIGINT (Interruption, e.g., ctrl+c) */
 	signal(SIGINT, set_leave_flag);
 
-  // client setup
+  /* client setup */
   int port, c_socket; char ip[100];
   if ((c_socket = client_setup(argc, argv, &port, ip)) < 0) return -1;
 
 
-  // get username, color
+  /* get username, color */
   char name[MAX_USERNAME_CHARS + 1] = "\0";
   char color[MAX_COLOR_CHARS + 1] = "\0";
-  // get_username_color(username, color);
 
 
-  const int screenWidth = 400;
-  const int screenHeight = 400;
+  const int screenWidth = 700;
+  const int screenHeight = 700;
 
   InitWindow(screenWidth, screenHeight, "Eating dots game");
 
@@ -162,31 +173,30 @@ int main(int argc, char **argv){
 
   int framesCounter = 0;
 
-  // start send thread
+  /* start send thread */
 	pthread_t send_thread;
   if(pthread_create(&send_thread, NULL, (void *) send_loop, &c_socket) != 0){
 		printf("[ERROR] thread creating err. \n");
     return -1;
 	}
 
-  // start receive thread
+  /* start receive thread */
 	pthread_t receive_thread;
   if(pthread_create(&receive_thread, NULL, (void *) receive_loop, &c_socket) != 0){
 		printf("ERROR: thread creating err. \n");
 		return -1;
 	}
 
-  // Main game loop
+  /* Main game loop */
   while (!WindowShouldClose() && leave_flag == 0) {
-    printf("%d\n", client_status);
       framesCounter++;
 
-      // Get pressed key (character) on the queue
+      /* Get pressed key (character) on the queue */
       int key = GetKeyPressed();
 
-      // Check if more characters have been pressed on the same frame
+      /* Check if more characters have been pressed on the same frame */
       while (key > 0) {
-          // NOTE: Only allow keys in range [32..125]
+          /* NOTE: Only allow keys in range [32..125] */
           if ((key >= 32) && (key <= 125)) {
               if (letterCount < MAX_USERNAME_CHARS && client_status == 0) {
                   name[letterCount] = (char)key;
@@ -198,7 +208,7 @@ int main(int argc, char **argv){
               }
           }
 
-          key = GetKeyPressed();  // Check next character in the queue
+          key = GetKeyPressed();  /* Check next character in the queue */
       }
 
       if (IsKeyPressed(KEY_BACKSPACE)) {
@@ -212,21 +222,23 @@ int main(int argc, char **argv){
           if (client_status == 0) {
               client_status = 1;
               letterCount = 0;
-          } else if (client_status == 1 && letterCount == MAX_COLOR_CHARS) { // only if color = 6 chars
+          } else if (client_status == 1 && letterCount == MAX_COLOR_CHARS) { /* only if color = 6 chars */
+              strcpy(client->username, name);
+              strcpy(client->color, color);
               client_status = 2;
               letterCount = 0;
-              // sending 0th packet (in send loop), it sends because c_status = 2
+              /* sending 0th packet (in send loop), it sends because c_status = 2 */
           }
       }
 
       int showFromPosition = (letterCount - MAX_CHARS_IN_TEXTBOX > 0) ? letterCount - MAX_CHARS_IN_TEXTBOX : 0;
 
-      // draw
+      /* draw */
       BeginDrawing();
 
           ClearBackground(RAYWHITE);
 
-          // draw according to client_status
+          /* draw according to client_status */
           if (client_status == 0) {
               DrawRectangleRec(textBox, LIGHTGRAY);
               DrawText(TextFormat("Please Enter Your Username"), text_box_x_pos, text_box_y_pos - font_size, font_size/2, DARKGRAY);
@@ -260,7 +272,7 @@ int main(int argc, char **argv){
 
   CloseWindow();
 
-  // close conn
+  /* close conn */
 	close(c_socket);
 
 	return 0;

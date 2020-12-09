@@ -5,7 +5,7 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include <ctype.h> // toupper, isprint
+#include <ctype.h> /* toupper, isprint */
 #include <inttypes.h>
 #include <unistd.h>
 #include "util_functions.h"
@@ -13,7 +13,8 @@
 
 unsigned char get_checksum(unsigned char* arr, int size) {
   unsigned char chk = 0;
-  for (int i = 0; i < size; i++) chk ^= arr[i];
+  int i;
+  for (i = 0; i < size; i++) chk ^= arr[i];
   return chk;
 }
 
@@ -29,33 +30,34 @@ void remove_newline(char *str) {
 }
 
 int contains_only_hex_digits(char* str) {
-  for (int i = 0; str[i] != '\0'; i++) {
+  int i;
+  for (i = 0; str[i] != '\0'; i++) {
     char c = toupper(str[i]);
-    if ((c < 48 || c > 57) && // decimal digit
-        (c < 65 || c > 70)) { // 'A' - 'F'
-        return str[i]; // invalid char
+    if ((c < 48 || c > 57) && /* decimal digit */
+        (c < 65 || c > 70)) { /* 'A' - 'F' */
+        return str[i]; /* invalid char */
     } else {
-      str[i] = c; // make uppercase
+      str[i] = c; /* make uppercase */
     }
   }
 
-  return -1; // yes, contains only hex digits
+  return -1; /* yes, contains only hex digits */
 }
 
 int assign_int_to_bytes_lendian_escape(unsigned char* packet_part, int n, int should_escape) {
   int escape_count = 0;
   if (should_escape) {
     unsigned char byte;
-    // byte 1
+    /* byte 1 */
     byte = n & 0xFF;
     escape_count += escape_assign(byte, &packet_part[0]);
-    // byte 2
+    /* byte 2 */
     byte = (n >> 8) & 0xFF;
     escape_count += escape_assign(byte, &packet_part[1 + escape_count]);
-    // byte 3
+    /* byte 3 */
     byte = (n >> 16) & 0xFF;
     escape_count += escape_assign(byte, &packet_part[2 + escape_count]);
-    // byte 4
+    /* byte 4 */
     byte = (n >> 16) & 0xFF;
     escape_count += escape_assign(byte, &packet_part[3 + escape_count]);
   } else {
@@ -69,12 +71,12 @@ int assign_int_to_bytes_lendian_escape(unsigned char* packet_part, int n, int sh
 }
 
 int get_int_from_4bytes_lendian(unsigned char* the4bytes) {
-  // It works only for little endian...
+  /* It works only for little endian... */
   return *((int *) the4bytes);
 }
 
 short int get_sh_int_2bytes_lendian(unsigned char* the2bytes) {
-  // It works only for little endian...
+  /* It works only for little endian... */
   return *((short int *) the2bytes);
 }
 
@@ -96,7 +98,7 @@ int escape_assign(unsigned char num, unsigned char* packet) {
     return 1;
 
   } else {
-    packet[0] = num & 0xFF; // cuts to one byte
+    packet[0] = num & 0xFF; /* cuts to one byte */
   }
 
   return 0;
@@ -130,8 +132,8 @@ void print_bytes(void* packet, int count) {
   }
 }
 
-// bitNumber should be from left side
-// Ex: (0000 0100 to get 1 we should indicate bitNumber 2)
+/* bitNumber should be from left side */
+/* Ex: (0000 0100 to get 1 we should indicate bitNumber 2) */
 char get_bit(unsigned char byte, char bitNumber) {
-  return (byte >> bitNumber) & 1; // 0 or 1
+  return (byte >> bitNumber) & 1; /*0 or 1*/
 }

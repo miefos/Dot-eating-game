@@ -5,15 +5,15 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include <ctype.h> // toupper, isprint
+#include <ctype.h> /* toupper, isprint */
 #include <inttypes.h>
 #include <unistd.h>
 #include "util_functions.h"
 #include "setup.h"
 
 int client_setup(int argc, char **argv, int *port, char *ip) {
-  //// GET ARGS
-  // validate parameters
+  /* GET ARGS */
+  /* validate parameters */
   if (argc != 3) {
     printf("[Error] Please provide IP and port argument only (ex: -a=123.123.123.123 -p=9001).\n");
     return -1;
@@ -38,17 +38,17 @@ int client_setup(int argc, char **argv, int *port, char *ip) {
   printf("[OK] Client params successful. Port: %d, ip: %s\n", *port, ip);
 
 
-  //// SETUP NETWORK
+  /* SETUP NETWORK */
   int client_socket = socket(AF_INET, SOCK_STREAM, 0);
 
-  // specify an address for the socket
+  /* specify an address for the socket */
   struct sockaddr_in server_address;
   server_address.sin_family = AF_INET;
   server_address.sin_port = htons(*port);
   server_address.sin_addr.s_addr = inet_addr(ip);
 
   int connection_status = connect(client_socket, (struct sockaddr *) &server_address, sizeof(server_address));
-  // check for error with the connection
+  /* check for error with the connection */
   if (connection_status < 0) {
     printf("[ERROR] There was an error with the connection.\n");
     printf("============================================================\n");
@@ -96,7 +96,7 @@ int server_network_setup(int* main_socket, struct sockaddr_in* server_address, i
 }
 
 int server_parse_args(int argc, char **argv, int *port) {
-    // validate parameters
+    /* validate parameters */
     if (argc != 2) {
       printf("[Error] Please provide port argument only (ex: -p=9001).\n");
       return -1;
@@ -118,14 +118,14 @@ int get_named_argument(char* key, int argc, char **argv, char** result) {
   int i;
   for (i = 0; i < argc; i++) {
     if (!strcmp(argv[i], "--"))
-      return -1; // end
+      return -1; /* end */
 
     if (strlen(key) + 2 > strlen(argv[i]))
       continue;
 
-    // check key
+    /* check key */
     if (argv[i][0] != '-') {
-      continue; // not found
+      continue; /* not found */
     }
 
     int j = 1;
@@ -133,35 +133,35 @@ int get_named_argument(char* key, int argc, char **argv, char** result) {
     while (key[j-1]) {
       if (key[j-1] != argv[i][j]) {
         breaked = 1;
-        break; // not found
+        break; /* not found */
       }
       j++;
     }
 
     if (breaked) {
-      continue; // not found
+      continue; /* not found */
     }
 
     if (argv[i][j] != '=') {
-      continue; // not found
+      continue; /* not found */
     }
 
     if ((strlen(argv[i]) < strlen(key)+3) || strlen(argv[i]) - strlen(key) - 2 < 1) {
-      return -3; // not found
+      return -3; /* not found */
     }
 
-    // copy
+    /* copy */
     *result = (char*) malloc(sizeof(char)*(strlen(argv[i]) - strlen(key) - 1));
     if (*result == NULL) {
-      return -4; // err malloc
+      return -4; /* err malloc */
     }
 
     strcpy(*result, (argv[i] + strlen(key)+2));
-    return strlen(*result); // found, return strlen
+    return strlen(*result); /* found, return strlen */
 
   }
 
-  return -1; // not found
+  return -1; /* not found */
 }
 
 int get_port(char* key, int argc, char** argv) {
@@ -170,14 +170,14 @@ int get_port(char* key, int argc, char** argv) {
   int i = 0;
 
   if (result < 0) {
-    return -1; // err
+    return -1; /* err */
   }
 
   while(port_c[i]) {
     /* printf("Currently checking %c\n", port_c[i]); */
     if (port_c[i] < 48 || port_c[i] > 57) {
       /* printf("Not only nums in port provided\n"); */
-      return -2; // err contains not numbers
+      return -2; /* err contains not numbers */
     }
     i++;
   }

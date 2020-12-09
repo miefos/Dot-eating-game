@@ -2,7 +2,7 @@
 #include <arpa/inet.h>
 
 #define MAX_CLIENTS 20
-#define MIN_CLIENTS 2 // to start the game
+#define MIN_CLIENTS 2 /* to start the game */
 #define INITIAL_N_DOTS 6
 #define BUFFER_SIZE 1024
 #define MAX_PACKET_SIZE 10000
@@ -11,14 +11,14 @@
 #define MAX_X 1000
 #define MAX_Y 1000
 #define MAX_MESSAGE_SIZE 511
-#define TIME_LIM 180 // in sec
+#define TIME_LIM 180 /* in sec */
 
 typedef struct {
   int socket;
   unsigned char ID;
   unsigned char ready;
-  // unsigned char connected; // 0 - this client is not connected, 1 - this client is connected
-  unsigned char has_introduced; // meaning the 0th packet is received (at first 0, when receives set it to 1)
+  /* unsigned char connected; */ /* 0 - this client is not connected, 1 - this client is connected */
+  unsigned char has_introduced; /* meaning the 0th packet is received (at first 0, when receives set it to 1) */
   char username[256];
   char color[7];
   unsigned int x;
