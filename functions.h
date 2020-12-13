@@ -39,8 +39,10 @@ typedef struct {
 typedef struct {
   unsigned char g_id;
   unsigned int time_left;
+  unsigned int time_limit;
+  unsigned int initial_size;
   unsigned int max_y, max_x;
-
+  unsigned int max_lives;
 } game;
 
 /*

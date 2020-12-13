@@ -172,7 +172,7 @@ int gameloop() {
 
 	/* try packet 3 */
 	unsigned char p[MAX_PACKET_SIZE];
-	unsigned int time_to_sleep = 5; /* secs */
+	unsigned int time_to_sleep = 1; /* secs */
 	unsigned int drop_player_after = 16; /* secs */
   while (1) {
 		int i;

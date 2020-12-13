@@ -404,6 +404,9 @@ int process_packet_1(unsigned char* p_dat, int *client_status, game *current_gam
   current_game->max_x = max_x;
   current_game->max_y = max_y;
   current_game->time_left = time_limit;
+  current_game->time_limit = time_limit;
+  current_game->initial_size = p_init_size;
+  current_game->initial_size = num_of_lives;
 
   client->ID = p_dat[1];
   client->size = p_init_size;
@@ -417,7 +420,7 @@ int process_packet_1(unsigned char* p_dat, int *client_status, game *current_gam
   return 0;
 }
 
-int process_packet_2(unsigned char* p_dat, client_struct* client) {
+int process_packet_2(unsigned char* p_dat, client_struct* client, game *current_game) {
   unsigned char g_id, p_id, byte3;
   int ready;
   g_id = p_dat[0];
@@ -428,30 +431,39 @@ int process_packet_2(unsigned char* p_dat, client_struct* client) {
 
   printf("[REC PACKET 2] g_id = %d, p_id = %d, byte 3 = %d, ready = %d\n", g_id, p_id, byte3, ready);
 
+    if (g_id != current_game->g_id || p_id != client->ID) {
+        printf("There was mistake in packet2.\n");
+    }
+
   client->ready = ready;
+
   return 0;
 }
 
-int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
+int process_packet_3(unsigned char* p, int* client_status, client_struct **clients, game *current_game) {
   unsigned char g_id;
   unsigned short int n_players, n_dots;
   unsigned int time_left;
-  client_struct* clients[MAX_CLIENTS];
-
+  /* client_struct* clients[MAX_CLIENTS]; */
 
   printf("[REC PACKET 3]\n");
+
   /* if packet 3 received, set player to ready state (done by server, client should adapt - that is why this function here)... */
   if (*client_status == 5) {
     *client_status = 6;
-    printf("Packet 3 received. Client status set to 6 from 5 although player did not get ready...\n");
+    printf("Client status set to 6 from 5 although player did not get ready...\n");
   }
-
 
   char username[256] = {0}, color[7] = {0};
   int name_l, total_client_len = 0;
 
   g_id = p[0];
   n_players = get_int_from_4bytes_lendian(&p[1]); /* 2 byte int */
+
+
+    if (g_id != current_game->g_id) {
+        printf("Error in packet 3\n");
+    }
 
   /* get PLAYER DATA */
   printf("\n=== PLAYERS IN GAME === \n");
@@ -508,9 +520,12 @@ int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
   }
 
   time_left = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + n_dots*8]); /* 4 bytes */
+  current_game->time_left = time_left;
 
-  if (2 == 3 && clients[0]) /* never true */
-    printf("Trashhere.. timeleft=%d, ID=%d, g_id=%d, username=%s, color=%s, c_socket=%d, client_status=%d\n", clients[0]->ID, time_left, g_id, username, color, c_socket, *client_status);
+  /* set to game is running */
+  if (*client_status == 6 || *client_status == 7) {
+      *client_status = 8;
+  }
 
   printf("\n");
 
@@ -547,7 +562,7 @@ int process_packet_5(unsigned char* p_dat, int *client_status) {
 
   printf("[REC PACKET 5] You died. Your score: %d, time passed %d. g_id=%d, p_id=%d\n", score, time_passed, g_id, p_id);
 
-  *client_status = 8;
+  *client_status = 9;
 
   return 0;
 }
@@ -581,7 +596,7 @@ int process_packet_6(unsigned char* p_dat, int* client_status) {
     printf("%s has %d points\n", username, score);
   }
 
-  *client_status = 9;
+  *client_status = 10;
 
   return 0;
 }
@@ -640,10 +655,10 @@ void* process_incoming_packet(void* packet_info) {
           if (!is_server && size_data == 23) process_result = process_packet_1(&p[size_header], client_status, current_game, client);
           break;
         case 2:
-          if (is_server) process_result = process_packet_2(&p[size_header], client);
+          if (is_server) process_result = process_packet_2(&p[size_header], client, current_game);
           break;
         case 3:
-          if (!is_server) process_result = process_packet_3(&p[size_header], c_socket, client_status);
+          if (!is_server) process_result = process_packet_3(&p[size_header], client_status, clients, current_game);
           break;
         case 4:
           if (is_server) process_result = process_packet_4(&p[size_header], client);
@@ -826,7 +841,7 @@ int recv_byte (
     }
 
   } else {
-    if (client_status && (*client_status == 8 || *client_status == 9))
+    if (client_status && (*client_status == 9 || *client_status == 10))
       return -1;
     printf("[WARNING] Error recv. Smth.\n");
     return -1;

@@ -44,7 +44,7 @@
 //    =========================================================
 //    Total packet size 22 (+ escapes)
 //
-// 2) Client ready (from client to server)
+// 2) Client ready (client -> server)
 //    ================ [2nd PACKET DATA CONTENT] ==================
 //    packet[0] = game ID
 //    packet[1] = player ID

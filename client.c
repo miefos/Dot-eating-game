@@ -34,8 +34,9 @@ int leave_flag = 0;
 /* 5 - after 1st packet waiting for user input in send_loop to set ready status */
 /* 6 - got input, ready status set */
 /* 7 - ready status sent to server (2rd packet sent) */
-/* 8 - game lost(died) (received packet 5) */
-/* 9 - Game ended (received packet 6) */
+/* 8 - game is running */
+/* 9 - game lost(died) (received packet 5) */
+/* 10 - Game ended (received packet 6) */
 /* 10 - CURRENTLY NOWHERE CAN PUT TO 10 */
 int client_status = 0;
 
@@ -132,7 +133,7 @@ void* receive_loop(void* arg) {
 
         result = recv_byte(packet_in, &packet_cursor, &packet_data_size, &packet_status, 0, client, *client_socket, &client_status, &client->ID, &process_packet_thread, current_game, clients);
 
-        if (client_status == 8 || client_status == 9) {
+        if (client_status == 9 || client_status == 10) {
           printf("Client status 8 or 9 detected in recv loop -- set_leave_flag()\n");
           set_leave_flag();
           continue;
@@ -304,6 +305,15 @@ int main(int argc, char **argv){
         ClearBackground(RAYWHITE);
 
         DrawText(TextFormat("Game ID: %i", current_game->g_id), 0, 0, font_size/2, DARKGRAY);
+        DrawText(TextFormat("Your size: %i", client->size), 0, font_size/2, font_size/2, DARKGRAY);
+        DrawText(TextFormat("Time: %i/%i", current_game->time_left, current_game->time_limit), 0, font_size, font_size/2, DARKGRAY);
+        DrawText(TextFormat("Players:"), 0, font_size*1.5, font_size/2, DARKGRAY);
+        int i;
+        for (i = 0; i < MAX_CLIENTS; i++) {
+            if (clients[i]){
+                DrawText(TextFormat("  %s", clients[i]->username), 0, font_size*(2+(float)i/2), font_size/2, DARKGRAY);
+            }
+        }
 
       /* draw according to client_status */
           if (client_status == 0) {
@@ -339,10 +349,13 @@ int main(int argc, char **argv){
               DrawText(TextFormat("You are ready and server knows that!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY);
           }
           else if (client_status == 8) {
+              DrawText(TextFormat("Game is running!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY);
+          }
+          else if (client_status == 9) {
               DrawText(TextFormat("Welcome %s!\nYour color is #%s", name, color), text_box_x_pos, text_box_y_pos, font_size, DARKGRAY);
               DrawText(TextFormat("You lost!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY);
           }
-          else if (client_status == 9) {
+          else if (client_status == 10) {
               DrawText(TextFormat("Welcome %s!\nYour color is #%s", name, color), text_box_x_pos, text_box_y_pos, font_size, DARKGRAY);
               DrawText(TextFormat("Game ended!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY);
           }
