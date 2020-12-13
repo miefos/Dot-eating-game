@@ -17,12 +17,13 @@
 
 /* still to do... */
 /* packet 6 / 5 remove client */
-/* add 00 at the end of packet? */
+/* SERVER SOMETIMES DO NOT ACCEPT CLIENT ... Hmm..*/
 /* check that pcket 6 should contain all members and do not exclude current member... etc */
 
+game *current_game;
 
 int client_count = 0;
-int ID = 0;
+int ID = 0; /* player id */
 client_struct* clients[MAX_CLIENTS];
 
 dot* dots[INITIAL_N_DOTS];
@@ -32,7 +33,7 @@ int gameloop();
 void* start_network(void* arg);
 void* process_client(void* arg);
 void set_leave_flag();
-void send_packet_to_all(unsigned char *p, int p_size);
+void send_packet_to_all(unsigned char *p, int p_size, int send_to_ready_only, int p_type);
 void broadcast_packet(char *packet, int id); /* do not send to specified ID */
 void remove_client(int id);
 client_struct* add_client(int client_socket);
@@ -67,6 +68,13 @@ int main(int argc, char **argv) {
 	signal(SIGINT, set_leave_flag);
 	/* create dots */
 	create_dots();
+	/* create game */
+    if ((current_game = (game*) malloc(sizeof(game))) == NULL) {
+        printf("[ERROR] Cannot malloc game.\n");
+        return -1;
+    }
+    current_game->g_id = 222;
+    current_game->time_left = 123;
   /* server setup */
   int port;
   if (server_parse_args(argc, argv, &port) < 0) return -1;
@@ -89,13 +97,14 @@ void* process_client(void* arg){
   int packet_cursor = 0; /* keeps track which packet_in index is set last */
   int current_packet_data_size = 0; /* from packet itself not counting */
 
+    pthread_t process_packet_thread;
 
 	client_struct* client = (client_struct *) arg;
 
 	while(1){
     if (client_leave_flag) break;
 
-    if ((result = recv_byte(packet_in, &packet_cursor, &current_packet_data_size, &packet_status, 1, client, -1, NULL, NULL, NULL)) > 0) {
+    if ((result = recv_byte(packet_in, &packet_cursor, &current_packet_data_size, &packet_status, 1, client, -1, NULL, NULL, &process_packet_thread, current_game, NULL)) > 0) {
         /* everything done in recv_byte already... */
 		} else if (result < 0){ /* disconnection or error */
       printf("[WARNING] From %s could not receive packet.\n", client->username);
@@ -113,7 +122,6 @@ void* process_client(void* arg){
 
 	return NULL;
 }
-
 
 void* start_network(void* arg) {
   int* port = (int *) arg;
@@ -164,58 +172,68 @@ int gameloop() {
 
 	/* try packet 3 */
 	unsigned char p[MAX_PACKET_SIZE];
-	unsigned char g_id = 211;
 	unsigned int time_to_sleep = 5; /* secs */
-	unsigned int drop_player_after = 12; /* secs */
+	unsigned int drop_player_after = 16; /* secs */
   while (1) {
+		int i;
+		for(i=0; i < MAX_CLIENTS; ++i) {
+			if(clients[i] && clients[i]->has_introduced) {
+					/* update connection time */
+					clients[i]->connected_time += time_to_sleep;
+
+					/* set ready status if time reached */
+					if (!clients[i]->ready && clients[i]->connected_time > MAX_UNREADY_TIME) {
+						clients[i]->ready = 1;
+						int p_size1 = _create_packet_7(p, current_game->g_id, clients[i]->ID, "\n\nYou are set ready because too long were unready!!\n\n");
+						if (send_prepared_packet(p, p_size1, clients[i]->socket) < 0) {
+							printf("[ERROR] Packet 7 could not be sent.\n");
+						} else {
+							printf("[SEND PACKET 7] Success.\n");
+						}
+					}
+
+				/* check die time */
+				printf("%s time is %d, die when %d >reached\n", clients[i]->username, clients[i]->connected_time, drop_player_after);
+				if (clients[i]->connected_time > drop_player_after) {
+					int p_size = _create_packet_5(p, current_game->g_id, clients[i]->ID, clients[i]->score, current_game->time_left);
+					if (send_prepared_packet(p, p_size, clients[i]->socket) < 0) {
+						printf("[ERROR] Packet 5 could not be sent.\n");
+					} else {
+						printf("[SEND PACKET 5] Success.\n");
+					}
+				}
+			}
+		}
+
+		int packet_size = _create_packet_3(p, current_game->g_id, clients, INITIAL_N_DOTS, dots, TIME_LIM - 2);
+		send_packet_to_all(p, packet_size, 1, 3); /* should have return val... */
+
 		/* init leave flag with CTRL + C. So it will send packet 6. */
     if (leave_flag) {
       printf("Leave flag detected in gameloop.\n");
 			int i;
 			for (i=0; i < MAX_CLIENTS; ++i) {
 				if(clients[i]) {
-					int p_size1 =  _create_packet_7(p, g_id, clients[i]->ID, "Sorry, time to go. I stopped the server.");
+					int p_size1 =  _create_packet_7(p, current_game->g_id, clients[i]->ID, "Sorry, time to go. I stopped the server.");
 					if (send_prepared_packet(p, p_size1, clients[i]->socket) < 0) {
 						printf("[ERROR] Packet 7 could not be sent.\n");
 					} else {
-						printf("[OK] Packet 7 sent successfully.\n");
+						printf("[SEND PACKET 7] Success.\n");
 					}
 
 
-					int p_size = _create_packet_6(p, g_id, clients, clients[i]->ID, clients[i]->score);
+					int p_size = _create_packet_6(p, current_game->g_id, clients, clients[i]->ID, clients[i]->score);
 					if (send_prepared_packet(p, p_size, clients[i]->socket) < 0) {
 						printf("[ERROR] Packet 6 could not be sent.\n");
 					} else {
-						printf("[OK] Packet 6 sent successfully.\n");
+						printf("[SEND PACKET 6] Success.\n");
 					}
 				}
 			}
       break;
     }
 
-
-		int packet_size = _create_packet_3(p, g_id, clients, INITIAL_N_DOTS, dots, TIME_LIM - 2);
-		send_packet_to_all(p, packet_size); /* should have return val... */
-
 		printf("[OK] Gameloop update sent...\n");
-
-		int i;
-		for(i=0; i < MAX_CLIENTS; ++i) {
-			if(clients[i] && clients[i]->ready) {
-				clients[i]->FOR_TESTING_ONLY += time_to_sleep; /* increase by 5 secs game time */
-				printf("%s time is %d, die when %d >reached\n", clients[i]->username, clients[i]->FOR_TESTING_ONLY, drop_player_after);
-				if (clients[i]->FOR_TESTING_ONLY > drop_player_after) {
-					int score = 159, time_left = 92; /* HARDCODED, should not be */
-					int p_size = _create_packet_5(p, g_id, clients[i]->ID, score, time_left);
-					if (send_prepared_packet(p, p_size, clients[i]->socket) < 0) {
-						printf("[ERROR] Packet 5 could not be sent.\n");
-					} else {
-						printf("[OK] Packet 5 sent successfully.\n");
-					}
-				}
-			}
-		}
-
 
     sleep(time_to_sleep);
   }
@@ -256,6 +274,7 @@ client_struct* add_client(int client_socket) {
 			client->size = INIT_SIZE;
 			client->score = 33; /* for testing only - should be 0 always! */
 			client->lives = INIT_LIVES;
+			client->connected_time = 0; /* init 0 secs*/
 			clients[i] = client;
       break;
 		}
@@ -289,17 +308,21 @@ void remove_client(int id) {
 }
 
 /* Send a packet to all clients */
-void send_packet_to_all(unsigned char *p, int p_size) {
+void send_packet_to_all(unsigned char *p, int p_size, int send_to_ready_only, int p_type) {
 	pthread_mutex_lock(&lock1);
 
 	int i;
 	for(i=0; i < MAX_CLIENTS; ++i) {
     if(clients[i]) {
+			if ((send_to_ready_only && clients[i]->ready) || !send_to_ready_only) {
 				if (send_prepared_packet(p, p_size, clients[i]->socket) < 0) {
 					printf("[WARNING] Packet could not be sent.....\n");
 				} else {
-					/* printf("[OK] Packet sent successfully.......\n"); */
+					printf("[SEND PACKET %i] Success.\n", p_type);
 				}
+			} else {
+				/* printf("Packet not sent to non-ready player...\n"); */
+			}
     }
 	}
 

@@ -1,6 +1,8 @@
 
 ======== IN THIS FILE IS INFORMATION REGARDING PACKET STRUCTURE ========
 
+// 
+
 1. General information
 // * Everywhere (almost) should be used unsigned data types (int, char, floats).
 // * Should use little endian encoding.
@@ -15,6 +17,7 @@
 // packet[7,8,9,10] = NPK                  // sequence of packet
 // packet[11 ... data_length + 11] = data  // packet data (see section 3)
 // packet[data_length+11+1] = XOR chk      // See Note.
+// packet
 // ===========================================
 // Note. XOR is done in while loop on non-escaped packet chk ^= packet[i].
 //       But not whole packet - only packet[2] ... packet[data_length + 11]

@@ -386,51 +386,33 @@ int process_packet_0(unsigned char* p_dat, client_struct* client) {
     printf("[ERROR] Packet 1 could not be sent.\n");
       return -1;
   } else {
-    printf("[OK] Packet 1 sent successfully.\n");
+    printf("[SEND PACKET 1] Success.\n");
   }
 
   return 0;
 }
 
-int process_packet_1(unsigned char* p_dat, int c_socket, int *client_status, unsigned char* g_id, unsigned char* p_id) {
+int process_packet_1(unsigned char* p_dat, int *client_status, game *current_game, client_struct *client) {
   *client_status = 4;
-  *g_id = p_dat[0];
-  *p_id = p_dat[1];
   unsigned int p_init_size = get_int_from_4bytes_lendian(&p_dat[2]); /* 4 bytes */
   unsigned int max_x = get_int_from_4bytes_lendian(&p_dat[6]); /* 4 bytes */
   unsigned int max_y = get_int_from_4bytes_lendian(&p_dat[10]); /* 4 bytes */
   unsigned int time_limit = get_int_from_4bytes_lendian(&p_dat[14]); /* 4 bytes */
   unsigned int num_of_lives = get_int_from_4bytes_lendian(&p_dat[18]); /* 4 bytes */
 
-  printf("[OK] Got packet 1. Game ID = %d, Player ID = %d, p_init_size = %d, field size (%d, %d), time %d, lives %d\n",
-          *g_id, *p_id, p_init_size, max_x, max_y, time_limit, num_of_lives);
+  current_game->g_id = p_dat[0];
+  current_game->max_x = max_x;
+  current_game->max_y = max_y;
+  current_game->time_left = time_limit;
 
-  /* wait for user input to send ready message*/
+  client->ID = p_dat[1];
+  client->size = p_init_size;
+  client->lives = num_of_lives;
+
+  printf("[REC PACKET 1] Game ID = %d, Player ID = %d, p_init_size = %d, field size (%d, %d), time %d, lives %d\n",
+          current_game->g_id, client->ID, p_init_size, max_x, max_y, time_limit, num_of_lives);
+
   *client_status = 5;
-  printf("Write anything to send ready message:\n");
-  /*
-    NOT VALID ANYMORE!
-    fgetc in send thread. It will change client_status to 3 when input received
-    if current client status is 2.
-  */
-  while (*client_status != 6) {
-    sleep(1);
-  }
-
-  char ready = 1;
-
-  /* sending packet 2 */
-  unsigned char p[MAX_PACKET_SIZE];
-  int packet_size = _create_packet_2(p, *g_id, *p_id, ready);
-
-  if (send_prepared_packet(p, packet_size, c_socket) < 0) {
-    printf("[ERROR] Packet 2 could not be sent.\n");
-      return -1;
-  } else {
-    printf("[OK] Packet 2 sent successfully.\n");
-  }
-
-  *client_status = 7;
 
   return 0;
 }
@@ -444,7 +426,7 @@ int process_packet_2(unsigned char* p_dat, client_struct* client) {
   int ready_bitNumber = 2; /* from left */
   ready = get_bit(byte3, ready_bitNumber);
 
-  printf("Received packet 2. g_id = %d, p_id = %d, byte 3 = %d, ready = %d\n", g_id, p_id, byte3, ready);
+  printf("[REC PACKET 2] g_id = %d, p_id = %d, byte 3 = %d, ready = %d\n", g_id, p_id, byte3, ready);
 
   client->ready = ready;
   return 0;
@@ -456,16 +438,23 @@ int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
   unsigned int time_left;
   client_struct* clients[MAX_CLIENTS];
 
+
+  printf("[REC PACKET 3]\n");
+  /* if packet 3 received, set player to ready state (done by server, client should adapt - that is why this function here)... */
+  if (*client_status == 5) {
+    *client_status = 6;
+    printf("Packet 3 received. Client status set to 6 from 5 although player did not get ready...\n");
+  }
+
+
   char username[256] = {0}, color[7] = {0};
   int name_l, total_client_len = 0;
-
-  printf("[OK] Packet 3 received.\n");
 
   g_id = p[0];
   n_players = get_int_from_4bytes_lendian(&p[1]); /* 2 byte int */
 
   /* get PLAYER DATA */
-  printf("[OK] The following clients were received by packet3: \n");
+  printf("\n=== PLAYERS IN GAME === \n");
   int i;
   for(i=0; i < n_players; ++i) {
     /* malloc client */
@@ -487,7 +476,7 @@ int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
 
     clients[i] = client;
 
-    printf("Client %d: %s (id=%d, #%s), x=%d, y=%d, size=%d, score=%d, lives=%d \n",
+    printf("%d: %s (id=%d, #%s), x=%d, y=%d, size=%d, score=%d, lives=%d\n",
       i+1, client->username, client->ID, client->color, client->x, client->y, client->size, client->score, client->lives);
 
       total_client_len += 30 + name_l - 3 + 1;
@@ -512,7 +501,7 @@ int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
   }
 
   /* print DOT DATA */
-  printf("[OK] Got the following dots: ");
+  printf("\n=== DOTS === \n");
   for(i=0; i < n_dots; ++i) {
     if (i == n_dots - 1) printf("[%d, %d]\n", dots[i]->x, dots[i]->y);
     else printf("[%d, %d], ", dots[i]->x, dots[i]->y);
@@ -520,37 +509,34 @@ int process_packet_3(unsigned char* p, int c_socket, int* client_status) {
 
   time_left = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + n_dots*8]); /* 4 bytes */
 
-  printf("[OK] time left: %d\n", time_left);
+  if (2 == 3 && clients[0]) /* never true */
+    printf("Trashhere.. timeleft=%d, ID=%d, g_id=%d, username=%s, color=%s, c_socket=%d, client_status=%d\n", clients[0]->ID, time_left, g_id, username, color, c_socket, *client_status);
 
-  /* trash_function( clients, &g_id, username, color, &c_socket, client_status); *//* used to disable warnings not useful */
-
-  if (clients[0] != NULL)
-    printf("Client0 ID=%d, g_id=%d, username=%s, color=%s, c_socket=%d, client_status=%d\n", clients[0]->ID, g_id, username, color, c_socket, *client_status);
+  printf("\n");
 
   return 0;
 }
 
 int process_packet_4(unsigned char* p_dat, client_struct* client) {
-  unsigned char g_id, p_id, byte3;
+  /* unsigned char g_id, p_id; */
+  unsigned char byte3;
   char w, a, s, d;
 
   char w_pos = 3, a_pos = 2, s_pos = 1, d_pos = 0; /* bitNumber, see get_bit */
-  g_id = p_dat[0];
-  p_id = p_dat[1];
+  /* g_id = p_dat[0];
+  p_id = p_dat[1]; */
   byte3 = p_dat[2];
   w = get_bit(byte3, w_pos);
   a = get_bit(byte3, a_pos);
   s = get_bit(byte3, s_pos);
   d = get_bit(byte3, d_pos);
 
-  printf("Received packet 4. g_id = %d, p_id = %d, pressed(w,a,s,d)=(%d,%d,%d,%d), cid=%d\n", g_id, p_id, w, a, s, d, client->ID);
-
-  /* some game logic should come here... */
+  printf("[REC PACKET 4] pressed(w,a,s,d)=(%d,%d,%d,%d), client=%d\n", w, a, s, d, client->ID);
 
   return 0;
 }
 
-int process_packet_5(unsigned char* p_dat, int* client_status) {
+int process_packet_5(unsigned char* p_dat, int *client_status) {
   unsigned char g_id, p_id;
   g_id = p_dat[0];
   p_id = p_dat[1];
@@ -559,7 +545,7 @@ int process_packet_5(unsigned char* p_dat, int* client_status) {
   score = get_int_from_4bytes_lendian(&p_dat[2]); /* 4 bytes */
   time_passed = get_int_from_4bytes_lendian(&p_dat[6]); /* 4 bytes */
 
-  printf("[OK] Received packet 5. You died. Your score: %d, time passed %d. g_id=%d, p_id=%d\n", score, time_passed, g_id, p_id);
+  printf("[REC PACKET 5] You died. Your score: %d, time passed %d. g_id=%d, p_id=%d\n", score, time_passed, g_id, p_id);
 
   *client_status = 8;
 
@@ -576,7 +562,7 @@ int process_packet_6(unsigned char* p_dat, int* client_status) {
   score = get_int_from_4bytes_lendian(&p_dat[2]); /* 4 bytes */
   n_players = get_int_from_4bytes_lendian(&p_dat[6]); /* 2 bytes */
 
-  printf("[OK] Received packet 6. GAME ENDED. g_id=%d, p_id=%d, p_score=%d\n", g_id, p_id, score);
+  printf("[REC PACKET 6] GAME ENDED. g_id=%d, p_id=%d, p_score=%d\n", g_id, p_id, score);
 
   int i;
   unsigned int bytesRead = 0;
@@ -600,11 +586,11 @@ int process_packet_6(unsigned char* p_dat, int* client_status) {
   return 0;
 }
 
-
 int process_packet_7 (unsigned char* p_dat) {
-  unsigned char g_id, p_id;
+  /* unsigned char g_id; */
+  unsigned char p_id;
   char message[MAX_MESSAGE_SIZE + 1] = {0};
-  g_id = p_dat[0];
+  /* g_id = p_dat[0]; */
   p_id = p_dat[1];
 
   short int message_l;
@@ -612,63 +598,79 @@ int process_packet_7 (unsigned char* p_dat) {
 
   memcpy(message, &p_dat[4], message_l); /* name_l bytes */
 
-  printf("Received new message: %s\n gid=%d,pid=%d\n", message, g_id, p_id);
+  printf("[MESSAGE(%d)] %s\n", p_id, message);
 
   return 0;
 }
 
-void process_incoming_packet(unsigned char *p, int size_header, int size_data, client_struct *client, int c_socket, int *client_status, unsigned char *g_id, unsigned char *p_id, int is_server) {
+void* process_incoming_packet(void* packet_info) {
+    process_inc_pack_struct *p_info = (process_inc_pack_struct *) packet_info;
+    unsigned char *p = p_info->p;
+    int size_header = p_info->size_header;
+    int size_data = p_info->size_data;
+    client_struct *client = p_info->client;
+    int c_socket = p_info->c_socket;
+    int *client_status = p_info->client_status;
+    game *current_game = p_info->current_game;
+    client_struct **clients = p_info->clients;
+    unsigned char *p_id = p_info->p_id;
+    int is_server = p_info->is_server;
+
   /* is_server = 1 (called function in server), is server = 0 (called function in client) */
   int size = size_header + size_data;
 
   int type = (int) p[0];
 
+  int checksum_ok = 0;
   unsigned char checksum = get_checksum(p, size - 1);
   if (p[size-1] == checksum)
-    printf("[OK] Checksums are correct.\n");
+    checksum_ok = 1;
+    /* printf("[OK] Checksums are correct.\n"); */
   else {
     printf("[WARNING] Packet number %d: checksums mismatch :(. Abandoned the packet. In packet %d but in server %d. \n", type, p[size-1], checksum);
-    return;
   }
 
   int process_result = -1;
-  switch (type) {
-    case 0:
-      if (is_server) process_result = process_packet_0(&p[size_header], client);
-      break;
-    case 1:
-      if (!is_server && size_data == 23) process_result = process_packet_1(&p[size_header], c_socket, client_status, g_id, p_id);
-      break;
-    case 2:
-      if (is_server) process_result = process_packet_2(&p[size_header], client);
-      break;
-    case 3:
-      if (!is_server) process_result = process_packet_3(&p[size_header], c_socket, client_status);
-      break;
-    case 4:
-      if (is_server) process_result = process_packet_4(&p[size_header], client);
-      break;
-    case 5:
-      if (!is_server) process_result = process_packet_5(&p[size_header], client_status);
-      break;
-    case 6:
-      if (!is_server) process_result = process_packet_6(&p[size_header], client_status);
-      break;
-    case 7:
-      print_bytes(&p[size_header], size - size_header);
-      process_result = process_packet_7(&p[size_header]);
-      break;
-    default:
-      printf("Invalid packet type. Abandoned.\n");
-      process_result = -1;
-      break;
-  }
+  if (checksum_ok)
+      switch (type) {
+        case 0:
+          if (is_server) process_result = process_packet_0(&p[size_header], client);
+          break;
+        case 1:
+          if (!is_server && size_data == 23) process_result = process_packet_1(&p[size_header], client_status, current_game, client);
+          break;
+        case 2:
+          if (is_server) process_result = process_packet_2(&p[size_header], client);
+          break;
+        case 3:
+          if (!is_server) process_result = process_packet_3(&p[size_header], c_socket, client_status);
+          break;
+        case 4:
+          if (is_server) process_result = process_packet_4(&p[size_header], client);
+          break;
+        case 5:
+          if (!is_server) process_result = process_packet_5(&p[size_header], client_status);
+          break;
+        case 6:
+          if (!is_server) process_result = process_packet_6(&p[size_header], client_status);
+          break;
+        case 7:
+          /* print_bytes(&p[size_header], size - size_header); */
+          process_result = process_packet_7(&p[size_header]);
+          break;
+        default:
+          printf("Invalid packet type. Abandoned.\n");
+          process_result = -1;
+          break;
+      }
 
   if (process_result < 0) {
     printf("[WARNING] Packet could not be processed by type function. \n");
-    return;
-  };
+  }
 
+  free(packet_info);
+
+  return NULL;
 }
 
 int recv_byte (
@@ -680,29 +682,33 @@ int recv_byte (
   client_struct *client,
   int client_socket,
   int *client_status,
-  unsigned char *g_id,
-  unsigned char *p_id
+  unsigned char *p_id,
+  pthread_t *process_packet_thread,
+  game* current_game,
+  client_struct **clients
   ) {
 
   int receive, socket = client_socket;
   unsigned char rec_byte[1];
   int packet_header_size_excl_div = 9;
 
-  if (client != NULL) socket = client->socket;
+  if (client != NULL && client->socket) socket = client->socket;
 
   if (*packet_cursor == 5) { /* position just after N_LEN */
       *current_packet_data_size = get_int_from_4bytes_lendian(&packet_in[1]);
       *packet_status = 2;
-      printf("[OK] Got packet data size: %d\n", *current_packet_data_size);
+      /* printf("[OK] Got packet data size: %d\n", *current_packet_data_size); */
   }
 
   if (*packet_cursor == packet_header_size_excl_div + *current_packet_data_size + 1) {
     /* should end with 00, check it */
     receive = recv(socket, rec_byte, 1, 0);
+    /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
   	if (receive > 0) { /* received byte */
       if (rec_byte[0] == 0) { /* divisor */
         /* print_one_byte(rec_byte[0]); */
         receive = recv(socket, rec_byte, 1, 0);
+        /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
         if (receive > 0) { /* received successfully */
           /* print_one_byte(rec_byte[0]); */
           if (rec_byte[0] == 0) { /* new packet */
@@ -723,21 +729,49 @@ int recv_byte (
       return -1;
     }
 
+    /* malloc packet_info struct */
+    process_inc_pack_struct *packet_info = (process_inc_pack_struct *) malloc(sizeof(process_inc_pack_struct));
+  	if (packet_info == NULL) {
+  	    printf("[ERROR] Could not allocate process_inc_pack_struct structure\n");
+  	    return -1;
+  	}
+
+  	packet_info->p = packet_in;
+  	packet_info->size_header = packet_header_size_excl_div;
+  	packet_info->size_data = *current_packet_data_size + 1;
+  	packet_info->client = client;
+  	packet_info->clients = clients;
+  	packet_info->c_socket = socket;
+  	packet_info->client_status = client_status;
+  	packet_info->current_game = current_game;
+  	packet_info->p_id = p_id;
+  	packet_info->is_server = is_server;
+    /* creating new thread creates many problems.. :(
+     * if really want to, create it but probably need to create locks accordingly
+     * perhaps mutex lock only one client message sequence or smth..
+     * currently cannot process 2 simultenously incoming packets because something is not working then
+     *
+     * */
+    if (process_packet_thread) {} /* just to avoid warning... */
+    /* pthread_create(process_packet_thread, NULL, &process_incoming_packet, packet_info); */
 
     /* printf("[OK] Reached end of packet reading... Current cursor pos. %d\n", *packet_cursor); */
-    process_incoming_packet(packet_in, packet_header_size_excl_div, *current_packet_data_size + 1, client, socket, client_status, g_id, p_id, is_server); /* TODO make seperate thread or smth so it can continue reading packets... */
+    process_incoming_packet(packet_info);
+    /* process_incoming_packet(packet_in, packet_header_size_excl_div, *current_packet_data_size + 1, client, socket, client_status, g_id, p_id, is_server); */
     *packet_status = 0;
     *current_packet_data_size = 0;
     *packet_cursor = 0;
   }
 
   receive = recv(socket, rec_byte, 1, 0);
+  /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
 	if (receive > 0) { /* received byte */
     if (rec_byte[0] == 0) { /* divisor */
-      /* print_one_byte(rec_byte[0]); */
+      /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
       receive = recv(socket, rec_byte, 1, 0);
+      /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
       if (receive > 0) { /* received successfully */
-        /* print_one_byte(rec_byte[0]); */
+        /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
         if (rec_byte[0] == 0) { /* new packet */
           if (*packet_status > 0) {/* previous packet should have been finished => error */
             printf("[WARNING] SHOULD NOT HAPPEN.\n");
@@ -764,6 +798,7 @@ int recv_byte (
 
       if (rec_byte[0] == 1) {
         receive = recv(socket, rec_byte, 1, 0);
+        /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
         if (receive > 0) { /* received successfully */
           if (rec_byte[0] == 2) { /* new packet */
               /* print_one_byte(0); */
@@ -816,7 +851,10 @@ int send_prepared_packet(unsigned char* p, int p_size, int socket) {
   int i;
   for (i = 0; i < p_size; i++) {
     /* printf("Sending packet's element %d: %c (%d)\n", i, printable_char(p[i]), p[i]); */
-  	if (send(socket, (p + i), 1, 0) < 0) return -1;
+  	if (send(socket, (p + i), 1, 0) < 0) {
+      printf("Error sending to socket %d\n", socket);
+      return -1;
+    }
   }
 
   return 0;
