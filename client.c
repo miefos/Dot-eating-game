@@ -10,7 +10,6 @@
 #include <sys/mman.h>
 #include <signal.h>
 #include <ctype.h>
-#include <math.h>
 #include "raylib.h" /* https://github.com/raysan5/raylib/wiki/Working-on-GNU-Linux */
 #include "functions.h"
 #include "util_functions.h"
@@ -46,10 +45,6 @@ void set_leave_flag() {
 
 
 /* FROM Roberts */
-double getRadius(client_struct *player){
-    return sqrt(player->size / PI);
-}
-
 int playerInScreen(client_struct *myPlayer, client_struct* otherPlayer){
     int viewWidth = 500;
     int viewHeight = 500;
@@ -81,21 +76,16 @@ int playerInScreen(client_struct *myPlayer, client_struct* otherPlayer){
 }
 
 void updateKeysPressed(unsigned char* keysPressed){
-    keysPressed[0] = keysPressed[1] = keysPressed[2] = keysPressed[3] = '0';
     if(IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)){
-        printf(".............UP is pressed... %d %d\n", IsKeyDown(KEY_UP), IsKeyDown(KEY_W));
         keysPressed[0] = '1';
     }
     if(IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)){
-        printf(".............Left is pressed... %d %d\n", IsKeyDown(KEY_LEFT), IsKeyDown(KEY_A));
         keysPressed[1] = '1';
     }
     if(IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)){
-        printf(".............Down is pressed... \n");
         keysPressed[2] = '1';
     }
     if(IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)){
-        printf(".............Right is pressed... \n");
         keysPressed[3] = '1';
     }
 }
@@ -149,7 +139,7 @@ void* send_loop(void* arg) {
         printf("[OK] Packet 7 sent successfully.\n");
       }
 
-      unsigned char wasd[5] = {0};
+      unsigned char wasd[4] = {0};
       updateKeysPressed(wasd);
       int p_size = _create_packet_4(p, &current_game->g_id, &client->ID, wasd[0], wasd[1], wasd[2], wasd[3]);
       if (send_prepared_packet(p, p_size, *client_socket) < 0) {
@@ -159,7 +149,7 @@ void* send_loop(void* arg) {
       }
 
     }
-    nsleep(100); /*milliseconds */
+    nsleep(50); /*milliseconds */
   }
 
   return NULL;
@@ -202,10 +192,10 @@ void* receive_loop(void* arg) {
             /* everything done in recv_byte already... */
             } else if (result < 0){ /* disconnection or error */
           printf("[WARNING] Could not receive package.\n");
-          set_leave_flag();
+          /* set_leave_flag(); */
             } else { /* receive == 0 */
-          printf("Recv failed. Leave flag set.\n");
-          set_leave_flag();
+            printf("Recv failed. Leave flag set.\n");
+          /* set_leave_flag(); */
         }
 
 	}
@@ -275,9 +265,10 @@ int main(int argc, char **argv){
 
     const int screenWidth = MAX_X;
     const int screenHeight = MAX_Y;
+    /*
     const int mapWidth = 200;
     const int mapHeight = 200;
-
+*/
   InitWindow(screenWidth, screenHeight, "Eating dots game");
 
   SetTargetFPS(60);
@@ -292,11 +283,19 @@ int main(int argc, char **argv){
   Rectangle textBox = {text_box_x_pos, text_box_y_pos, text_box_x_len, text_box_y_len};
 
     Camera2D camera = {};
-    camera.offset = (Vector2){screenWidth/2, screenHeight/2};
+    /* camera.offset = (Vector2){screenWidth/2, screenHeight/2}; */
   int framesCounter = 0;
 
   /* Main game loop */
   while (!WindowShouldClose() && leave_flag == 0) {
+
+      /* Border */
+
+      DrawRectangle(0,0, BORDER_SIZE,MAX_Y, RED);
+      DrawRectangle(0,0, MAX_X,BORDER_SIZE, RED);
+      DrawRectangle(MAX_X-BORDER_SIZE,0, BORDER_SIZE,MAX_Y, RED);
+      DrawRectangle(0,MAX_Y-BORDER_SIZE, MAX_X,BORDER_SIZE, RED);
+
       framesCounter++;
 
       /* Get pressed key (character) on the queue */
@@ -367,14 +366,14 @@ int main(int argc, char **argv){
 
         ClearBackground(RAYWHITE);
 
-        DrawText(TextFormat("Game ID: %i", current_game->g_id), 0, 0, font_size/2, DARKGRAY);
-        DrawText(TextFormat("Your size: %i", client->size), 0, font_size/2, font_size/2, DARKGRAY);
-        DrawText(TextFormat("Time: %i/%i", current_game->time_left, current_game->time_limit), 0, font_size, font_size/2, DARKGRAY);
-        DrawText(TextFormat("Players:"), 0, font_size*1.5, font_size/2, DARKGRAY);
+        DrawText(TextFormat("Game ID: %i", current_game->g_id), BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING, font_size/2, DARKGRAY);
+        DrawText(TextFormat("Your size: %i", client->size), BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING + font_size/2, font_size/2, DARKGRAY);
+        DrawText(TextFormat("Time: %i/%i", current_game->time_left, current_game->time_limit), BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING + font_size , font_size/2, DARKGRAY);
+        DrawText(TextFormat("Players:"), BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + font_size*1.5 + BASIC_TEXT_PADDING, font_size/2, DARKGRAY);
         int i;
         for (i = 0; i < current_game->clients_active; i++) {
             if (clients[i]) {
-                DrawText(TextFormat("  %s", clients[i]->username), 0, font_size*(2+(float)i/2), font_size/2, DARKGRAY);
+                DrawText(TextFormat("  %s", clients[i]->username), BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING + font_size*(2+(float)i/2), font_size/2, DARKGRAY);
             }
         }
 
@@ -412,9 +411,8 @@ int main(int argc, char **argv){
               DrawText(TextFormat("You are ready and server knows that!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY);
           }
           else if (client_status == 8) {
-              Vector2 playerLocation = {client->x, client->y};
+              Vector2 playerLocation = {0, 0};
               camera.target = playerLocation;
-              camera.offset = (Vector2){screenWidth/2, screenHeight/2};
               camera.zoom = 1; /* Zoom should depend on size of player */
               BeginMode2D(camera);
               int i;
@@ -426,6 +424,11 @@ int main(int argc, char **argv){
                           sscanf((char *) clients[i]->color, "%02x%02x%02x", &red, &green, &blue);
                           Color playerColor = {red, green, blue, 255};
                           Vector2 playerPosition = {clients[i]->x, clients[i]->y};
+
+                          /* current player*/
+                          if (clients[i]->ID == client->ID) {
+                              DrawText(TextFormat("Your current location: x=%i y=%i", clients[i]->x, clients[i]->y), 200 + BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING, font_size/2, DARKGRAY);
+                          }
 
                           DrawCircleV(playerPosition, getRadius(clients[i]), playerColor);
                           /* printf("Circle position is x=%d y=%d, and radius is %f\n", clients[i]->x, clients[i]->y, getRadius(clients[i])); */
@@ -440,7 +443,7 @@ int main(int argc, char **argv){
               /* Draw food, currently no clue where the food should be so its not implemented */
 
               EndMode2D();
-              DrawText(TextFormat("Game is running!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY);
+              /* DrawText(TextFormat("Game is running!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY); */
           }
           else if (client_status == 9) {
               DrawText(TextFormat("Welcome %s!\nYour color is #%s", name, color), text_box_x_pos, text_box_y_pos, font_size, DARKGRAY);

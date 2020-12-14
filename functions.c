@@ -1,8 +1,8 @@
-#include "functions.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <math.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <ctype.h> /* toupper, isprint */
@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include "util_functions.h"
 #include "setup.h"
+#include "functions.h"
 
 int _create_packet_0(unsigned char* p, char* name, char* color) {
   unsigned char type = 0;
@@ -547,32 +548,40 @@ int process_packet_4(unsigned char* p_dat, client_struct* client) {
   s = get_bit(byte3, s_pos);
   d = get_bit(byte3, d_pos);
 
+  int *x = (int *) &client->x;
+  int *y = (int *) &client->y;
+
+  int min_x = BORDER_SIZE + getRadius(client) + 1;
+  int max_x = MAX_X - (BORDER_SIZE + getRadius(client));
+  int min_y = BORDER_SIZE + getRadius(client) + 1;
+  int max_y = MAX_Y - (BORDER_SIZE + getRadius(client));
+
   if (w) {
-      if ((client->y -= SPEED) > 0)
-          client->y -= SPEED;
+      if ((*y - SPEED) > min_y)
+          *y -= SPEED;
       else
-          client->y = 0;
+          *y = min_y;
   }
 
     if (s) {
-        if ((client->y += SPEED) < MAX_Y)
-            client->y += SPEED;
+        if ((*y + SPEED) < max_y)
+            *y += SPEED;
         else
-            client->y = MAX_Y;
+            *y = max_y;
     }
 
     if (a) {
-        if ((client->x -= SPEED) > 0)
-            client->x -= SPEED;
+        if ((*x - SPEED) > min_x)
+            *x -= SPEED;
         else
-            client->x = 0;
+            *x = min_x;
     }
 
     if (d) {
-        if ((client->x += SPEED) <= MAX_X)
-            client->x += SPEED;
+        if ((*x + SPEED) < max_x)
+            *x += SPEED;
         else
-            client->x = MAX_X;
+            *x = max_x;
     }
 
   printf("[REC PACKET 4] pressed(w,a,s,d)=(%d,%d,%d,%d), client=%d\n", w, a, s, d, client->ID);
@@ -952,4 +961,8 @@ int process_str(char* str, unsigned char* xor, unsigned char* p_part) {
   }
 
   return esc;
+}
+
+double getRadius(client_struct *player) {
+    return sqrt(player->size / M_PI);
 }

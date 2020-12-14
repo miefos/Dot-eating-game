@@ -13,7 +13,9 @@
 #define MAX_X 700
 #define MAX_Y 700
 #define MAX_MESSAGE_SIZE 511
-#define SPEED 1
+#define SPEED 4
+#define BASIC_TEXT_PADDING 5
+#define BORDER_SIZE 8
 #define TIME_LIM 180 /* in sec */
 
 typedef struct {
@@ -89,3 +91,4 @@ int process_str(char *str, unsigned char *xor, unsigned char *p_part);
 int process_int_lendian(int n, unsigned char *p_part, unsigned char *xor);
 int process_short_int_lendian(short int n, unsigned char *p_part, unsigned char *xor);
 int set_packet_header(unsigned char type, unsigned char *p, unsigned int N_LEN, unsigned int npk, unsigned char *xor);
+double getRadius(client_struct *player);
