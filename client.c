@@ -10,6 +10,7 @@
 #include <sys/mman.h>
 #include <signal.h>
 #include <ctype.h>
+#include <math.h>
 #include "raylib.h" /* https://github.com/raysan5/raylib/wiki/Working-on-GNU-Linux */
 #include "functions.h"
 #include "util_functions.h"
@@ -23,7 +24,6 @@ client_struct* client;
 client_struct* clients[MAX_CLIENTS];
 game* current_game;
 
-pthread_mutex_t thread_lock = PTHREAD_MUTEX_INITIALIZER;
 int leave_flag = 0;
 /* client status information... */
 /* 0 - initial */
@@ -44,12 +44,73 @@ void set_leave_flag() {
     leave_flag = 1;
 }
 
+
+/* FROM Roberts */
+double getRadius(client_struct *player){
+    return sqrt(player->size / PI);
+}
+
+int playerInScreen(client_struct *myPlayer, client_struct* otherPlayer){
+    int viewWidth = 500;
+    int viewHeight = 500;
+    int otherPlayersRadius = getRadius(otherPlayer);
+
+    /* something weird happenning here.. just return 1 */
+
+    return 1;
+
+    if(myPlayer->x + viewWidth < otherPlayer->x - otherPlayersRadius){
+        printf("case1\n");
+        printf("%d,%d,%d,%d\n", myPlayer->x, viewWidth, otherPlayer->x, otherPlayersRadius);
+        printf("%d,%d\n", myPlayer->x + viewWidth, otherPlayer->x - otherPlayersRadius);
+        return 0;
+    }
+    if(myPlayer->x - viewWidth >= otherPlayer->x + otherPlayersRadius){
+        printf("case2\n");
+        return 0;
+    }
+    if(myPlayer->y - viewHeight >= otherPlayer->y + otherPlayersRadius){
+        printf("case3\n");
+        return 0;
+    }
+    if(myPlayer->y + viewHeight <= otherPlayer->y - otherPlayersRadius){
+        printf("case4\n");
+        return 0;
+    }
+    return 1;
+}
+
+void updateKeysPressed(unsigned char* keysPressed){
+    keysPressed[0] = keysPressed[1] = keysPressed[2] = keysPressed[3] = '0';
+    if(IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)){
+        printf(".............UP is pressed... %d %d\n", IsKeyDown(KEY_UP), IsKeyDown(KEY_W));
+        keysPressed[0] = '1';
+    }
+    if(IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A)){
+        printf(".............Left is pressed... %d %d\n", IsKeyDown(KEY_LEFT), IsKeyDown(KEY_A));
+        keysPressed[1] = '1';
+    }
+    if(IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S)){
+        printf(".............Down is pressed... \n");
+        keysPressed[2] = '1';
+    }
+    if(IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)){
+        printf(".............Right is pressed... \n");
+        keysPressed[3] = '1';
+    }
+}
+
+float set_zoom_value(double size){
+    return 6 - size / 5;
+}
+
+/* END FROM ROBERTS*/
+
 void* send_loop(void* arg) {
 	int* client_socket = (int *) arg;
 
   while(1) {
     if (client_status == 2) {
-      pthread_mutex_lock(&thread_lock);
       unsigned char p[MAX_PACKET_SIZE];
 
       /* Send 0th packet */
@@ -60,7 +121,7 @@ void* send_loop(void* arg) {
         printf("[OK] 0th packet sent successfully.\n");
       }
       client_status = 3;
-      pthread_mutex_unlock(&thread_lock);
+      client->has_introduced = 1;
     }
     else if (client_status == 6) {
       char ready = 1;
@@ -77,9 +138,7 @@ void* send_loop(void* arg) {
 
       client_status = 7;
     }
-    else if (client_status == 7) { /* getchar for packet 4 updates */
-      pthread_mutex_lock(&thread_lock);
-      sleep(4);
+    else if (client_status == 8) {
       unsigned char p[MAX_PACKET_SIZE];
 
       /* send 7th packet */
@@ -90,11 +149,9 @@ void* send_loop(void* arg) {
         printf("[OK] Packet 7 sent successfully.\n");
       }
 
-      char w = 0, a = 0, s = 0, d = 0;
-      /* somehow should determine which keys pressed ... currently hard-coded. */
-      /* perhaps also some logic should be changed so that this not come only after fgetc */
-      w = 1; a = 0; s = 1; d = 1; /* 1 - pressed, 0 - not pressed */
-      int p_size = _create_packet_4(p, &current_game->g_id, &client->ID, w, a, s, d);
+      unsigned char wasd[5] = {0};
+      updateKeysPressed(wasd);
+      int p_size = _create_packet_4(p, &current_game->g_id, &client->ID, wasd[0], wasd[1], wasd[2], wasd[3]);
       if (send_prepared_packet(p, p_size, *client_socket) < 0) {
         printf("[ERROR] Packet 4 could not be sent.\n");
       } else {
@@ -102,8 +159,7 @@ void* send_loop(void* arg) {
       }
 
     }
-    pthread_mutex_unlock(&thread_lock);
-    sleep(0.1); /* send packet each 0.1s */
+    nsleep(100); /*milliseconds */
   }
 
   return NULL;
@@ -121,11 +177,12 @@ void* receive_loop(void* arg) {
 
   int* client_socket = (int *) arg;
 
-	while(1) {
-        /* this is used to check that thread_lock is unlocked */
-        pthread_mutex_lock(&thread_lock);
-        pthread_mutex_unlock(&thread_lock);
+  /* start receiving only when client has introduced... to prevent 1st packet being received before 0th finished... */
+  while (!client->has_introduced) {
+      sleep(1);
+  }
 
+	while(1) {
         if (leave_flag) {
           printf("RECEIVE LOOP EXIT!\n");
           break;
@@ -180,6 +237,7 @@ int main(int argc, char **argv){
     printf("[ERROR] Cannot malloc client.\n");
     return -1;
   }
+  client->has_introduced = 0;
 
   /* malloc game */
     if ((current_game = (game*) malloc(sizeof(game))) == NULL) {
@@ -188,6 +246,7 @@ int main(int argc, char **argv){
     }
     current_game->g_id = 0;
     current_game->time_left = 0;
+    current_game->time_limit = 0;
 
   /* catch SIGINT (Interruption, e.g., ctrl+c) */
 	signal(SIGINT, set_leave_flag);
@@ -196,12 +255,28 @@ int main(int argc, char **argv){
   int port, c_socket; char ip[100];
   if ((c_socket = client_setup(argc, argv, &port, ip)) < 0) return -1;
 
-  /* get username, color */
+
+    /* start send thread */
+    pthread_t send_thread;
+    if(pthread_create(&send_thread, NULL, (void *) send_loop, &c_socket) != 0){
+        printf("[ERROR] thread creating err. \n");
+        return -1;
+    }
+
+    /* start receive thread */
+    pthread_t receive_thread;
+    if(pthread_create(&receive_thread, NULL, (void *) receive_loop, &c_socket) != 0){
+        printf("ERROR: thread creating err. \n");
+        return -1;
+    }
+
   char name[MAX_USERNAME_CHARS + 1] = "\0";
   char color[MAX_COLOR_CHARS + 1] = "\0";
 
-  const int screenWidth = 700;
-  const int screenHeight = 700;
+    const int screenWidth = MAX_X;
+    const int screenHeight = MAX_Y;
+    const int mapWidth = 200;
+    const int mapHeight = 200;
 
   InitWindow(screenWidth, screenHeight, "Eating dots game");
 
@@ -216,21 +291,9 @@ int main(int argc, char **argv){
   int text_box_y_pos = screenWidth / 2 - text_box_y_len / 2;
   Rectangle textBox = {text_box_x_pos, text_box_y_pos, text_box_x_len, text_box_y_len};
 
+    Camera2D camera = {};
+    camera.offset = (Vector2){screenWidth/2, screenHeight/2};
   int framesCounter = 0;
-
-  /* start send thread */
-	pthread_t send_thread;
-  if(pthread_create(&send_thread, NULL, (void *) send_loop, &c_socket) != 0){
-		printf("[ERROR] thread creating err. \n");
-    return -1;
-	}
-
-  /* start receive thread */
-	pthread_t receive_thread;
-  if(pthread_create(&receive_thread, NULL, (void *) receive_loop, &c_socket) != 0){
-		printf("ERROR: thread creating err. \n");
-		return -1;
-	}
 
   /* Main game loop */
   while (!WindowShouldClose() && leave_flag == 0) {
@@ -309,8 +372,8 @@ int main(int argc, char **argv){
         DrawText(TextFormat("Time: %i/%i", current_game->time_left, current_game->time_limit), 0, font_size, font_size/2, DARKGRAY);
         DrawText(TextFormat("Players:"), 0, font_size*1.5, font_size/2, DARKGRAY);
         int i;
-        for (i = 0; i < MAX_CLIENTS; i++) {
-            if (clients[i]){
+        for (i = 0; i < current_game->clients_active; i++) {
+            if (clients[i]) {
                 DrawText(TextFormat("  %s", clients[i]->username), 0, font_size*(2+(float)i/2), font_size/2, DARKGRAY);
             }
         }
@@ -349,6 +412,34 @@ int main(int argc, char **argv){
               DrawText(TextFormat("You are ready and server knows that!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY);
           }
           else if (client_status == 8) {
+              Vector2 playerLocation = {client->x, client->y};
+              camera.target = playerLocation;
+              camera.offset = (Vector2){screenWidth/2, screenHeight/2};
+              camera.zoom = 1; /* Zoom should depend on size of player */
+              BeginMode2D(camera);
+              int i;
+              for(i = 0; i < current_game->clients_active; i++){
+                  if (clients[i]) {
+                      if (playerInScreen(client, clients[i])) {
+                          /* Getting HEX colors to rgb format */
+                          int red, green, blue;
+                          sscanf((char *) clients[i]->color, "%02x%02x%02x", &red, &green, &blue);
+                          Color playerColor = {red, green, blue, 255};
+                          Vector2 playerPosition = {clients[i]->x, clients[i]->y};
+
+                          DrawCircleV(playerPosition, getRadius(clients[i]), playerColor);
+                          /* printf("Circle position is x=%d y=%d, and radius is %f\n", clients[i]->x, clients[i]->y, getRadius(clients[i])); */
+
+                          int usernameLength = MeasureText((char *) clients[i]->username, 10);
+                          DrawText((char *) clients[i]->username,
+                                   clients[i]->x - usernameLength / 2,
+                                   clients[i]->y, 10, MAGENTA);
+                      }
+                  }
+              }
+              /* Draw food, currently no clue where the food should be so its not implemented */
+
+              EndMode2D();
               DrawText(TextFormat("Game is running!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY);
           }
           else if (client_status == 9) {

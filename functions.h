@@ -8,11 +8,12 @@
 #define MAX_UNREADY_TIME 3 /* after 10 secs set player to ready. Start counting from when has introduced. */
 #define BUFFER_SIZE 1024
 #define MAX_PACKET_SIZE 10000
-#define INIT_SIZE 10
+#define INIT_SIZE 1000
 #define INIT_LIVES 1
-#define MAX_X 1000
-#define MAX_Y 1000
+#define MAX_X 700
+#define MAX_Y 700
 #define MAX_MESSAGE_SIZE 511
+#define SPEED 1
 #define TIME_LIM 180 /* in sec */
 
 typedef struct {
@@ -28,7 +29,7 @@ typedef struct {
   unsigned int size;
   unsigned int score;
   unsigned int lives;
-  unsigned int connected_time;
+  float connected_time;
 } client_struct;
 
 typedef struct {
@@ -43,6 +44,7 @@ typedef struct {
   unsigned int initial_size;
   unsigned int max_y, max_x;
   unsigned int max_lives;
+  int clients_active;
 } game;
 
 /*
@@ -75,7 +77,7 @@ int _packet6_helper_process_clients(client_struct** clients, int* n_clients, uns
 
 int send_packet_1(client_struct *client);
 
-int process_packet_0(unsigned char *p_dat, client_struct *client);
+int process_packet_0(unsigned char *p_dat, client_struct *client, game *current_game);
 int process_packet_1(unsigned char *p_dat, int *client_status, game *current_game, client_struct *client);
 int process_packet_7 (unsigned char *p_dat);
 

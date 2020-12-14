@@ -355,7 +355,7 @@ int _create_packet_7(unsigned char* p, unsigned char g_id, unsigned char p_id, c
   return last + 3;
 }
 
-int process_packet_0(unsigned char* p_dat, client_struct* client) {
+int process_packet_0(unsigned char* p_dat, client_struct* client, game *current_game) {
   unsigned char name_l = (unsigned char) p_dat[0];
   char username[256] = {0}, color[7] = {0};
   memcpy(username, &p_dat[1], name_l);
@@ -378,7 +378,7 @@ int process_packet_0(unsigned char* p_dat, client_struct* client) {
   /* sending packet 1 */
   unsigned char p[MAX_PACKET_SIZE];
   unsigned char p_id = (unsigned char) client->ID;
-  unsigned char g_id = 211; /* should be evaluated somehow */
+  unsigned char g_id = current_game->g_id;
 
   int packet_size = _create_packet_1(p, g_id, p_id, INIT_SIZE, MAX_X, MAX_Y, TIME_LIM, INIT_LIVES);
 
@@ -454,20 +454,21 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
     printf("Client status set to 6 from 5 although player did not get ready...\n");
   }
 
-  char username[256] = {0}, color[7] = {0};
   int name_l, total_client_len = 0;
 
   g_id = p[0];
   n_players = get_int_from_4bytes_lendian(&p[1]); /* 2 byte int */
 
+  current_game->clients_active = n_players;
 
     if (g_id != current_game->g_id) {
-        printf("Error in packet 3\n");
+        printf("Error in packet 3: g_id=%d but current_game->g_id=%d\n", g_id, current_game->g_id);
     }
+
+    int i;
 
   /* get PLAYER DATA */
   printf("\n=== PLAYERS IN GAME === \n");
-  int i;
   for(i=0; i < n_players; ++i) {
     /* malloc client */
     client_struct* client = (client_struct *) malloc(sizeof(client_struct));
@@ -545,6 +546,34 @@ int process_packet_4(unsigned char* p_dat, client_struct* client) {
   a = get_bit(byte3, a_pos);
   s = get_bit(byte3, s_pos);
   d = get_bit(byte3, d_pos);
+
+  if (w) {
+      if ((client->y -= SPEED) > 0)
+          client->y -= SPEED;
+      else
+          client->y = 0;
+  }
+
+    if (s) {
+        if ((client->y += SPEED) < MAX_Y)
+            client->y += SPEED;
+        else
+            client->y = MAX_Y;
+    }
+
+    if (a) {
+        if ((client->x -= SPEED) > 0)
+            client->x -= SPEED;
+        else
+            client->x = 0;
+    }
+
+    if (d) {
+        if ((client->x += SPEED) <= MAX_X)
+            client->x += SPEED;
+        else
+            client->x = MAX_X;
+    }
 
   printf("[REC PACKET 4] pressed(w,a,s,d)=(%d,%d,%d,%d), client=%d\n", w, a, s, d, client->ID);
 
@@ -624,11 +653,11 @@ void* process_incoming_packet(void* packet_info) {
     int size_header = p_info->size_header;
     int size_data = p_info->size_data;
     client_struct *client = p_info->client;
-    int c_socket = p_info->c_socket;
+    /* int c_socket = p_info->c_socket; */
     int *client_status = p_info->client_status;
     game *current_game = p_info->current_game;
     client_struct **clients = p_info->clients;
-    unsigned char *p_id = p_info->p_id;
+    /* unsigned char *p_id = p_info->p_id; */
     int is_server = p_info->is_server;
 
   /* is_server = 1 (called function in server), is server = 0 (called function in client) */
@@ -649,7 +678,7 @@ void* process_incoming_packet(void* packet_info) {
   if (checksum_ok)
       switch (type) {
         case 0:
-          if (is_server) process_result = process_packet_0(&p[size_header], client);
+          if (is_server) process_result = process_packet_0(&p[size_header], client, current_game);
           break;
         case 1:
           if (!is_server && size_data == 23) process_result = process_packet_1(&p[size_header], client_status, current_game, client);

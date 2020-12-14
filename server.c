@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <time.h>
 #include "raylib.h"
 #include "functions.h"
 #include "util_functions.h"
@@ -66,7 +67,7 @@ void free_dots() {
 int main(int argc, char **argv) {
   /* catch CTRL+C */
 	signal(SIGINT, set_leave_flag);
-	/* create dots */
+    /* create dots */
 	create_dots();
 	/* create game */
     if ((current_game = (game*) malloc(sizeof(game))) == NULL) {
@@ -172,8 +173,8 @@ int gameloop() {
 
 	/* try packet 3 */
 	unsigned char p[MAX_PACKET_SIZE];
-	unsigned int time_to_sleep = 1; /* secs */
-	unsigned int drop_player_after = 16; /* secs */
+	float time_to_sleep = 0.5; /* secs */
+	unsigned int drop_player_after = 60; /* secs */
   while (1) {
 		int i;
 		for(i=0; i < MAX_CLIENTS; ++i) {
@@ -193,7 +194,7 @@ int gameloop() {
 					}
 
 				/* check die time */
-				printf("%s time is %d, die when %d >reached\n", clients[i]->username, clients[i]->connected_time, drop_player_after);
+				printf("%s time is %f02, die when %d >reached\n", clients[i]->username, clients[i]->connected_time, drop_player_after);
 				if (clients[i]->connected_time > drop_player_after) {
 					int p_size = _create_packet_5(p, current_game->g_id, clients[i]->ID, clients[i]->score, current_game->time_left);
 					if (send_prepared_packet(p, p_size, clients[i]->socket) < 0) {
@@ -233,9 +234,9 @@ int gameloop() {
       break;
     }
 
-		printf("[OK] Gameloop update sent...\n");
+    /* printf("[OK] Gameloop update sent...\n"); */
 
-    sleep(time_to_sleep);
+    nsleep(1000*time_to_sleep);
   }
 
   /* wait for packets to be sent etc */
@@ -268,14 +269,14 @@ client_struct* add_client(int client_socket) {
       client->ID = ID;
       ID++;
       client->has_introduced = 0;
-			client->ready = 0;
-			client->x = 5; /* initial position should be evaluated somehow */
-			client->y = 9; /* initial position should be evaluated somehow */
-			client->size = INIT_SIZE;
-			client->score = 33; /* for testing only - should be 0 always! */
-			client->lives = INIT_LIVES;
-			client->connected_time = 0; /* init 0 secs*/
-			clients[i] = client;
+        client->ready = 0;
+        client->x = GetRandomValue(0, MAX_X/2);
+        client->y = GetRandomValue(0, MAX_Y/2);
+        client->size = INIT_SIZE;
+        client->score = 0;
+        client->lives = INIT_LIVES;
+        client->connected_time = 0; /* init 0 secs*/
+        clients[i] = client;
       break;
 		}
 	}
