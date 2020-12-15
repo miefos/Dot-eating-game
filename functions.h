@@ -4,19 +4,23 @@
 
 #define MAX_CLIENTS 20
 #define MIN_CLIENTS 2 /* to start the game */
-#define INITIAL_N_DOTS 6
-#define MAX_UNREADY_TIME 3 /* after 10 secs set player to ready. Start counting from when has introduced. */
+#define MAX_DOTS 14
+#define MAX_UNREADY_TIME 1 /* time which is allowed player to get ready... */
 #define BUFFER_SIZE 1024
 #define MAX_PACKET_SIZE 10000
 #define INIT_SIZE 1000
 #define INIT_LIVES 1
 #define MAX_X 700
 #define MAX_Y 700
+#define CIRCLE_RADIUS 8
+#define N_POINTS_FOR_C_RADIUS_UNIT 50
+#define GET_PERCENTS_OF_EATEN_PLAYER 40
 #define MAX_MESSAGE_SIZE 511
-#define SPEED 4
+#define SPEED 200.0
+#define SIZE_SPEED_COEFFICIENT 0.02
 #define BASIC_TEXT_PADDING 5
 #define BORDER_SIZE 8
-#define TIME_LIM 180 /* in sec */
+#define TIME_LIM 100 /* in sec */
 
 typedef struct {
   int socket;
@@ -26,8 +30,9 @@ typedef struct {
   unsigned char has_introduced; /* meaning the 0th packet is received (at first 0, when receives set it to 1) */
   char username[256];
   char color[7];
-  unsigned int x;
-  unsigned int y;
+  unsigned char wasd[4];
+  float x; /* in packet unsigned int */
+  float y; /* in packet unsigned int */
   unsigned int size;
   unsigned int score;
   unsigned int lives;
@@ -59,6 +64,7 @@ typedef struct {
     int size_data;
     client_struct *client;
     client_struct **clients;
+    dot **dots;
     int c_socket;
     int *client_status;
     game *current_game;
@@ -84,7 +90,7 @@ int process_packet_1(unsigned char *p_dat, int *client_status, game *current_gam
 int process_packet_7 (unsigned char *p_dat);
 
 void* process_incoming_packet(void* process_inc_pack_struct);
-int recv_byte (unsigned char *packet_in, int *packet_cursor, int *current_packet_data_size, int *packet_status, int is_server, client_struct *client, int client_socket, int *client_status, unsigned char *p_id, pthread_t *process_packet_thread, game *current_game, client_struct** clients);
+int recv_byte (unsigned char *packet_in, int *packet_cursor, int *current_packet_data_size, int *packet_status, int is_server, client_struct *client, int client_socket, int *client_status, unsigned char *p_id, pthread_t *process_packet_thread, game *current_game, client_struct** clients, dot** dots);
 int send_prepared_packet(unsigned char *p, int p_size, int socket);
 int get_username_color(char *username, char *color);
 int process_str(char *str, unsigned char *xor, unsigned char *p_part);

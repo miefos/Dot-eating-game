@@ -105,7 +105,7 @@ int _packet3_helper_process_dots(dot** dots, unsigned short int n_dots, unsigned
   unsigned int x,y;
 
   int i;
-  for(i=0; i < n_dots; ++i) {
+  for(i=0; i < MAX_DOTS; ++i) {
     if(dots[i]) {
       esc = 0;
       x = dots[i]->x;
@@ -116,7 +116,7 @@ int _packet3_helper_process_dots(dot** dots, unsigned short int n_dots, unsigned
 
       bytesWritten += esc + 4 + 4;
     } else {
-      printf("[WARNING] Hmm.. dot was not initialized...\n");
+      /* printf("[WARNING] Hmm.. dot was not initialized...\n"); */
     }
   }
 
@@ -131,33 +131,33 @@ int _packet3_helper_process_clients(client_struct** clients, int* n_clients, uns
 
   int i;
   for(i=0; i < MAX_CLIENTS; ++i) {
-		if(clients[i] && clients[i]->has_introduced) {
-      esc_internal = 0;
-      ID = clients[i]->ID;
-			x = clients[i]->x;
-			y = clients[i]->y;
-			size = clients[i]->size;
-			score = clients[i]->score;
-			lives = clients[i]->lives;
-      strcpy(username, clients[i]->username);
-      name_l = strlen(username);
-      strcpy(color, clients[i]->color);
+    if(clients[i] && clients[i]->has_introduced) {
+        esc_internal = 0;
+        ID = clients[i]->ID;
+        x = clients[i]->x;
+        y = clients[i]->y;
+        size = clients[i]->size;
+        score = clients[i]->score;
+        lives = clients[i]->lives;
+        strcpy(username, clients[i]->username);
+        name_l = strlen(username);
+        strcpy(color, clients[i]->color);
 
-      (*n_clients)++;
-      (*xor) ^= ID; (*xor) ^= name_l;
-      esc_internal += escape_assign(ID, &p_data[0 + esc_internal + bytesWritten]); /* ID (1 byte) */
-      esc_internal += escape_assign(name_l, &p_data[1 + esc_internal + bytesWritten]); /* Length of name (1 byte) */
-      esc_internal += process_str(username, xor, &p_data[2 + esc_internal + bytesWritten]); /* username (strlen(username) bytes) */
-      esc_internal += process_int_lendian(x, &p_data[2 + esc_internal + name_l + bytesWritten], xor); /* x location (4 bytes) */
-      esc_internal += process_int_lendian(y, &p_data[6 + esc_internal + name_l + bytesWritten], xor); /* y location (4 bytes) */
-      esc_internal += process_str(color, xor, &p_data[10 + esc_internal + name_l + bytesWritten]); /* color (6 bytes) */
-      esc_internal += process_int_lendian(size, &p_data[16 + esc_internal + name_l + bytesWritten], xor); /* size (4 bytes) */
-      esc_internal += process_int_lendian(score, &p_data[20 + esc_internal + name_l + bytesWritten], xor); /* score (4 bytes) */
-      esc_internal += process_int_lendian(lives, &p_data[24 + esc_internal + name_l + bytesWritten], xor); /* lives (4 bytes); */
+        (*n_clients)++;
+        (*xor) ^= ID; (*xor) ^= name_l;
+        esc_internal += escape_assign(ID, &p_data[0 + esc_internal + bytesWritten]); /* ID (1 byte) */
+        esc_internal += escape_assign(name_l, &p_data[1 + esc_internal + bytesWritten]); /* Length of name (1 byte) */
+        esc_internal += process_str(username, xor, &p_data[2 + esc_internal + bytesWritten]); /* username (strlen(username) bytes) */
+        esc_internal += process_int_lendian(x, &p_data[2 + esc_internal + name_l + bytesWritten], xor); /* x location (4 bytes) */
+        esc_internal += process_int_lendian(y, &p_data[6 + esc_internal + name_l + bytesWritten], xor); /* y location (4 bytes) */
+        esc_internal += process_str(color, xor, &p_data[10 + esc_internal + name_l + bytesWritten]); /* color (6 bytes) */
+        esc_internal += process_int_lendian(size, &p_data[16 + esc_internal + name_l + bytesWritten], xor); /* size (4 bytes) */
+        esc_internal += process_int_lendian(score, &p_data[20 + esc_internal + name_l + bytesWritten], xor); /* score (4 bytes) */
+        esc_internal += process_int_lendian(lives, &p_data[24 + esc_internal + name_l + bytesWritten], xor); /* lives (4 bytes); */
 
-      esc_total += esc_internal;
+        esc_total += esc_internal;
 
-      bytesWritten += 28 + esc_internal + name_l;
+        bytesWritten += 28 + esc_internal + name_l;
 
 		}
 	}
@@ -441,7 +441,7 @@ int process_packet_2(unsigned char* p_dat, client_struct* client, game *current_
   return 0;
 }
 
-int process_packet_3(unsigned char* p, int* client_status, client_struct **clients, game *current_game) {
+int process_packet_3(unsigned char* p, int* client_status, client_struct **clients, game *current_game, dot **dots) {
   unsigned char g_id;
   unsigned short int n_players, n_dots;
   unsigned int time_left;
@@ -481,8 +481,10 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
     client->ID = p[3 + total_client_len];
     name_l = p[4 + total_client_len];
     memcpy(client->username, &p[5 + total_client_len], name_l);
-    client->x = get_int_from_4bytes_lendian(&p[5 + name_l + total_client_len]); /* 4 bytes */
-    client->y = get_int_from_4bytes_lendian(&p[9 + name_l + total_client_len]); /* 4 bytes */
+    unsigned int x = get_int_from_4bytes_lendian(&p[5 + name_l + total_client_len]); /* 4 bytes */
+    unsigned int y = get_int_from_4bytes_lendian(&p[9 + name_l + total_client_len]); /* 4 bytes */
+    client->x = (float) x;
+    client->y = (float) y;
     memcpy(client->color, &p[13 + total_client_len + name_l], 6);
     client->size = get_int_from_4bytes_lendian(&p[19 + total_client_len + name_l]); /* 4 bytes */
     client->score = get_int_from_4bytes_lendian(&p[23 + total_client_len + name_l]); /* 4 bytes */
@@ -490,16 +492,20 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
 
     clients[i] = client;
 
-    printf("%d: %s (id=%d, #%s), x=%d, y=%d, size=%d, score=%d, lives=%d\n",
+    printf("%d: %s (id=%d, #%s), x=%f, y=%f, size=%d, score=%d, lives=%d\n",
       i+1, client->username, client->ID, client->color, client->x, client->y, client->size, client->score, client->lives);
 
       total_client_len += 30 + name_l - 3 + 1;
   }
 
   n_dots = get_sh_int_2bytes_lendian(&p[3 + total_client_len]); /* 2 bytes */
-  dot* dots[n_dots];
 
   /* get DOT DATA */
+  for (i=0; i < MAX_DOTS; i++) {
+      if (dots[i])
+          dots[i] = NULL;
+  }
+
   for(i=0; i < n_dots; ++i) {
     /* malloc dot */
     dot* somedot = (dot *) malloc(sizeof(dot));
@@ -543,11 +549,12 @@ int process_packet_4(unsigned char* p_dat, client_struct* client) {
   /* g_id = p_dat[0];
   p_id = p_dat[1]; */
   byte3 = p_dat[2];
-  w = get_bit(byte3, w_pos);
-  a = get_bit(byte3, a_pos);
-  s = get_bit(byte3, s_pos);
-  d = get_bit(byte3, d_pos);
+    w = (client->wasd[0] = get_bit(byte3, w_pos)); /* W pressed*/
+    a = (client->wasd[1] = get_bit(byte3, a_pos)); /* A pressed */
+    s = (client->wasd[2] = get_bit(byte3, s_pos)); /* S pressed */
+    d = (client->wasd[3] = get_bit(byte3, d_pos)); /* D pressed */
 
+  /*
   int *x = (int *) &client->x;
   int *y = (int *) &client->y;
 
@@ -557,33 +564,33 @@ int process_packet_4(unsigned char* p_dat, client_struct* client) {
   int max_y = MAX_Y - (BORDER_SIZE + getRadius(client));
 
   if (w) {
-      if ((*y - SPEED) > min_y)
-          *y -= SPEED;
+      if ((*y - SPEED*delta) > min_y)
+          *y -= SPEED*delta;
       else
           *y = min_y;
   }
 
     if (s) {
-        if ((*y + SPEED) < max_y)
-            *y += SPEED;
+        if ((*y + SPEED*delta) < max_y)
+            *y += SPEED*delta;
         else
             *y = max_y;
     }
 
     if (a) {
-        if ((*x - SPEED) > min_x)
-            *x -= SPEED;
+        if ((*x - SPEED*delta) > min_x)
+            *x -= SPEED*delta;
         else
             *x = min_x;
     }
 
     if (d) {
-        if ((*x + SPEED) < max_x)
-            *x += SPEED;
+        if ((*x + SPEED*delta) < max_x)
+            *x += SPEED*delta;
         else
             *x = max_x;
     }
-
+*/
   printf("[REC PACKET 4] pressed(w,a,s,d)=(%d,%d,%d,%d), client=%d\n", w, a, s, d, client->ID);
 
   return 0;
@@ -668,6 +675,7 @@ void* process_incoming_packet(void* packet_info) {
     client_struct **clients = p_info->clients;
     /* unsigned char *p_id = p_info->p_id; */
     int is_server = p_info->is_server;
+    dot **dots = p_info->dots;
 
   /* is_server = 1 (called function in server), is server = 0 (called function in client) */
   int size = size_header + size_data;
@@ -696,7 +704,7 @@ void* process_incoming_packet(void* packet_info) {
           if (is_server) process_result = process_packet_2(&p[size_header], client, current_game);
           break;
         case 3:
-          if (!is_server) process_result = process_packet_3(&p[size_header], client_status, clients, current_game);
+          if (!is_server) process_result = process_packet_3(&p[size_header], client_status, clients, current_game, dots);
           break;
         case 4:
           if (is_server) process_result = process_packet_4(&p[size_header], client);
@@ -738,7 +746,8 @@ int recv_byte (
   unsigned char *p_id,
   pthread_t *process_packet_thread,
   game* current_game,
-  client_struct **clients
+  client_struct **clients,
+  dot **dots
   ) {
 
   int receive, socket = client_socket;
@@ -799,6 +808,7 @@ int recv_byte (
   	packet_info->current_game = current_game;
   	packet_info->p_id = p_id;
   	packet_info->is_server = is_server;
+  	packet_info->dots = dots;
     /* creating new thread creates many problems.. :(
      * if really want to, create it but probably need to create locks accordingly
      * perhaps mutex lock only one client message sequence or smth..

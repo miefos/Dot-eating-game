@@ -19,9 +19,10 @@
 #define MAX_COLOR_CHARS 6
 #define MAX_CHARS_IN_TEXTBOX 15
 
-client_struct* client;
-client_struct* clients[MAX_CLIENTS];
-game* current_game;
+client_struct *client;
+client_struct *clients[MAX_CLIENTS];
+dot *dots[MAX_DOTS];
+game *current_game;
 
 int leave_flag = 0;
 /* client status information... */
@@ -56,8 +57,6 @@ int playerInScreen(client_struct *myPlayer, client_struct* otherPlayer){
 
     if(myPlayer->x + viewWidth < otherPlayer->x - otherPlayersRadius){
         printf("case1\n");
-        printf("%d,%d,%d,%d\n", myPlayer->x, viewWidth, otherPlayer->x, otherPlayersRadius);
-        printf("%d,%d\n", myPlayer->x + viewWidth, otherPlayer->x - otherPlayersRadius);
         return 0;
     }
     if(myPlayer->x - viewWidth >= otherPlayer->x + otherPlayersRadius){
@@ -149,7 +148,7 @@ void* send_loop(void* arg) {
       }
 
     }
-    nsleep(50); /*milliseconds */
+    nsleep(10); /*milliseconds */
   }
 
   return NULL;
@@ -178,7 +177,7 @@ void* receive_loop(void* arg) {
           break;
         };
 
-        result = recv_byte(packet_in, &packet_cursor, &packet_data_size, &packet_status, 0, client, *client_socket, &client_status, &client->ID, &process_packet_thread, current_game, clients);
+        result = recv_byte(packet_in, &packet_cursor, &packet_data_size, &packet_status, 0, client, *client_socket, &client_status, &client->ID, &process_packet_thread, current_game, clients, dots);
 
         if (client_status == 9 || client_status == 10) {
           printf("Client status 8 or 9 detected in recv loop -- set_leave_flag()\n");
@@ -237,6 +236,7 @@ int main(int argc, char **argv){
     current_game->g_id = 0;
     current_game->time_left = 0;
     current_game->time_limit = 0;
+    current_game->max_lives = INIT_LIVES;
 
   /* catch SIGINT (Interruption, e.g., ctrl+c) */
 	signal(SIGINT, set_leave_flag);
@@ -271,7 +271,7 @@ int main(int argc, char **argv){
 */
   InitWindow(screenWidth, screenHeight, "Eating dots game");
 
-  SetTargetFPS(60);
+  SetTargetFPS(30);
 
   int letterCount = 0;
 
@@ -288,13 +288,11 @@ int main(int argc, char **argv){
 
   /* Main game loop */
   while (!WindowShouldClose() && leave_flag == 0) {
-
       /* Border */
-
-      DrawRectangle(0,0, BORDER_SIZE,MAX_Y, RED);
-      DrawRectangle(0,0, MAX_X,BORDER_SIZE, RED);
-      DrawRectangle(MAX_X-BORDER_SIZE,0, BORDER_SIZE,MAX_Y, RED);
-      DrawRectangle(0,MAX_Y-BORDER_SIZE, MAX_X,BORDER_SIZE, RED);
+      DrawRectangle(0,0, BORDER_SIZE,MAX_Y, LIME);
+      DrawRectangle(0,0, MAX_X,BORDER_SIZE, LIME);
+      DrawRectangle(MAX_X-BORDER_SIZE,0, BORDER_SIZE,MAX_Y, LIME);
+      DrawRectangle(0,MAX_Y-BORDER_SIZE, MAX_X,BORDER_SIZE, LIME);
 
       framesCounter++;
 
@@ -366,14 +364,12 @@ int main(int argc, char **argv){
 
         ClearBackground(RAYWHITE);
 
-        DrawText(TextFormat("Game ID: %i", current_game->g_id), BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING, font_size/2, DARKGRAY);
-        DrawText(TextFormat("Your size: %i", client->size), BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING + font_size/2, font_size/2, DARKGRAY);
-        DrawText(TextFormat("Time: %i/%i", current_game->time_left, current_game->time_limit), BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING + font_size , font_size/2, DARKGRAY);
-        DrawText(TextFormat("Players:"), BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + font_size*1.5 + BASIC_TEXT_PADDING, font_size/2, DARKGRAY);
+        DrawText(TextFormat("Time: %i/%i", current_game->time_left, current_game->time_limit), BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING , font_size/2, DARKGRAY);
+        DrawText(TextFormat("Scores:"), BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + font_size*0.5 + BASIC_TEXT_PADDING, font_size/2, DARKGRAY);
         int i;
         for (i = 0; i < current_game->clients_active; i++) {
             if (clients[i]) {
-                DrawText(TextFormat("  %s", clients[i]->username), BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING + font_size*(2+(float)i/2), font_size/2, DARKGRAY);
+                DrawText(TextFormat("%s (%i)", clients[i]->username, clients[i]->score), BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING + font_size*(1+(float)i/2), font_size/2, DARKGRAY);
             }
         }
 
@@ -408,16 +404,17 @@ int main(int argc, char **argv){
           }
           else if (client_status == 7) { /* sent to server */
               DrawText(TextFormat("Welcome %s!\nYour color is #%s", name, color), text_box_x_pos, text_box_y_pos, font_size, DARKGRAY);
-              DrawText(TextFormat("You are ready and server knows that!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY);
+              DrawText(TextFormat("You are ready and server knows that!\nHost should write anything in server console to \nSTART THE GAME!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY);
           }
           else if (client_status == 8) {
               Vector2 playerLocation = {0, 0};
               camera.target = playerLocation;
               camera.zoom = 1; /* Zoom should depend on size of player */
               BeginMode2D(camera);
+              /* print players */
               int i;
               for(i = 0; i < current_game->clients_active; i++){
-                  if (clients[i]) {
+                  if (clients[i] && clients[i]->lives > 0) {
                       if (playerInScreen(client, clients[i])) {
                           /* Getting HEX colors to rgb format */
                           int red, green, blue;
@@ -427,20 +424,30 @@ int main(int argc, char **argv){
 
                           /* current player*/
                           if (clients[i]->ID == client->ID) {
-                              DrawText(TextFormat("Your current location: x=%i y=%i", clients[i]->x, clients[i]->y), 200 + BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING, font_size/2, DARKGRAY);
+                              DrawText(TextFormat("Your current location: x=%.0f y=%.0f", clients[i]->x, clients[i]->y), 200 + BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING, font_size/2, DARKGRAY);
+                              DrawText(TextFormat("Lives: %i/%i", clients[i]->lives, current_game->max_lives), 200 + BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING + font_size/2, font_size/2, DARKGRAY);
                           }
 
                           DrawCircleV(playerPosition, getRadius(clients[i]), playerColor);
                           /* printf("Circle position is x=%d y=%d, and radius is %f\n", clients[i]->x, clients[i]->y, getRadius(clients[i])); */
 
-                          int usernameLength = MeasureText((char *) clients[i]->username, 10);
-                          DrawText((char *) clients[i]->username,
+                          /* int sizeLength = MeasureText(TextFormat("%04i", clients[i]->size), font_size/2);
+                          DrawText(TextFormat("%04i", clients[i]->size), clients[i]->x - sizeLength / 2, clients[i]->y + getRadius(clients[i]) / 2, font_size / 2, MAGENTA);
+                           */
+                          int usernameLength = MeasureText(clients[i]->username, font_size/2);
+                          DrawText(clients[i]->username,
                                    clients[i]->x - usernameLength / 2,
-                                   clients[i]->y, 10, MAGENTA);
+                                   clients[i]->y + getRadius(clients[i]), font_size/2, MAGENTA);
                       }
                   }
               }
-              /* Draw food, currently no clue where the food should be so its not implemented */
+
+              /* print dots */
+              unsigned int dcount;
+              for (dcount = 0; dcount < MAX_DOTS; dcount++) {
+                  if (dots[dcount])
+                    DrawCircle(dots[dcount]->x, dots[dcount]->y, CIRCLE_RADIUS, RED);
+              }
 
               EndMode2D();
               /* DrawText(TextFormat("Game is running!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY); */
