@@ -28,6 +28,8 @@ int curr_n_dots = MAX_DOTS;
 int ID = 0; /* player id */
 client_struct* clients[MAX_CLIENTS];
 
+time_t game_start_time;
+
 dot* dots[MAX_DOTS];
 volatile int leave_flag = 0;
 
@@ -198,17 +200,34 @@ int gameloop() {
           }
       }
 
-      /* game time */
-      game_time_update += time_to_sleep;
-      if (game_time_update >= 1) { /* when 1 sec reached */
-          if (current_game->time_left >= 1)
+
+      if(current_game->clients_active == 1){
+          game_start_time = clock();
+      }
+      else{
+          game_time_update += (clock() - game_start_time) / CLOCKS_PER_SEC;
+          if (game_time_update >= 1) { /* when 1 sec reached */
+            if (current_game->time_left >= 1)
               current_game->time_left -= 1;
-          else { /* TIME OUT - game ended */
+            else { /* TIME OUT - game ended */
               set_leave_flag();
               continue;
-          }
-          game_time_update = 0;
+            }
+            game_time_update = 0;
+        }
       }
+
+      /* game time */
+    //   game_time_update += time_to_sleep;
+    //   if (game_time_update >= 1) { /* when 1 sec reached */
+    //       if (current_game->time_left >= 1)
+    //           current_game->time_left -= 1;
+    //       else { /* TIME OUT - game ended */
+    //           set_leave_flag();
+    //           continue;
+    //       }
+    //       game_time_update = 0;
+    //   }
 
     int i;
     for(i=0; i < MAX_CLIENTS; ++i) {
