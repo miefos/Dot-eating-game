@@ -293,6 +293,7 @@ int gameloop() {
             float max_y = MAX_Y - (BORDER_SIZE + getRadius(clients[i]));
 
             float speed = SPEED - SIZE_SPEED_COEFFICIENT * clients[i]->size;
+            if(speed < SPEED / 10) speed = SPEED * 0.1;
 
             if (w) {
                 if ((*y - speed*delta) > min_y)
