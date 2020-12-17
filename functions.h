@@ -4,7 +4,7 @@
 
 #define MAX_CLIENTS 20
 #define MIN_CLIENTS 2 /* to start the game */
-#define MAX_DOTS 16
+#define MAX_DOTS 20
 #define MAX_UNREADY_TIME 1 /* time which is allowed player to get ready... */
 #define BUFFER_SIZE 1024
 #define MAX_PACKET_SIZE 10000
