@@ -181,8 +181,8 @@ int gameloop() {
           break;
       }
 
-      /* if field not full, 0.5% chance to create new dot */
-      if (curr_n_dots < MAX_DOTS && GetRandomValue(0, 200) == 1) {
+      /* if field not full, 4% chance to create new dot */
+      if (curr_n_dots < MAX_DOTS && GetRandomValue(0, 50) == 1) {
           int dc;
           for(dc = 0; dc < MAX_DOTS; dc++) {
               if (!dots[dc]) {
@@ -312,7 +312,7 @@ int gameloop() {
             float max_y = MAX_Y - (BORDER_SIZE + getRadius(clients[i]));
 
             float speed = SPEED - SIZE_SPEED_COEFFICIENT * clients[i]->size;
-            if(speed < SPEED / 10) speed = SPEED * 0.1;
+            if(speed < MIN_SPEED) speed = MIN_SPEED;
 
             if (w) {
                 if ((*y - speed*delta) > min_y)
@@ -361,7 +361,7 @@ int gameloop() {
         }
     }
 
-    int packet_size = _create_packet_3(p, current_game->g_id, clients, curr_n_dots, dots, current_game->time_left, npk++);
+    int packet_size = _create_packet_3(p, current_game->g_id, clients, curr_n_dots, dots, current_game->time_left, npk);
     send_packet_to_all(p, packet_size, 1, 3); /* should have return val... */
 
     nsleep(1000*time_to_sleep);

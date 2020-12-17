@@ -4,20 +4,21 @@
 
 #define MAX_CLIENTS 20
 #define MIN_CLIENTS 2 /* to start the game */
-#define MAX_DOTS 14
+#define MAX_DOTS 16
 #define MAX_UNREADY_TIME 1 /* time which is allowed player to get ready... */
 #define BUFFER_SIZE 1024
 #define MAX_PACKET_SIZE 10000
-#define INIT_SIZE 1000
+#define INIT_SIZE 850
 #define INIT_LIVES 1
-#define MAX_X 700
-#define MAX_Y 700
-#define CIRCLE_RADIUS 8
-#define N_POINTS_FOR_C_RADIUS_UNIT 50
+#define MAX_X 800
+#define MAX_Y 800
+#define CIRCLE_RADIUS 7
+#define N_POINTS_FOR_C_RADIUS_UNIT 30
 #define GET_PERCENTS_OF_EATEN_PLAYER 40
 #define MAX_MESSAGE_SIZE 511
 #define SPEED 200.0
-#define SIZE_SPEED_COEFFICIENT 0.02
+#define MIN_SPEED 60.0
+#define SIZE_SPEED_COEFFICIENT 0.002
 #define BASIC_TEXT_PADDING 5
 #define BORDER_SIZE 8
 #define TIME_LIM 100 /* in sec */

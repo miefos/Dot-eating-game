@@ -142,7 +142,7 @@ void* send_loop(void* arg) {
 
       unsigned char wasd[4] = {0};
       updateKeysPressed(wasd);
-      int p_size = _create_packet_4(p, &current_game->g_id, &client->ID, wasd[0], wasd[1], wasd[2], wasd[3], npk++);
+      int p_size = _create_packet_4(p, &current_game->g_id, &client->ID, wasd[0], wasd[1], wasd[2], wasd[3], npk);
       if (send_prepared_packet(p, p_size, *client_socket) < 0) {
         printf("[ERROR] Packet 4 could not be sent.\n");
       } else {
