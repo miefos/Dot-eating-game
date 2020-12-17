@@ -17,7 +17,7 @@ int _create_packet_0(unsigned char* p, char* name, char* color) {
   unsigned int npk = 0;
   unsigned char xor = 0;
   unsigned char name_l = (unsigned char) strlen(name);
-  unsigned char N_LEN = name_l + 1 + 6; /* 1 - name_l, 6 - color */
+  unsigned int N_LEN = name_l + 1 + 6; /* 1 - name_l, 6 - color */
   int esc = 0; /* escape count */
 
   /* p header */
@@ -43,7 +43,7 @@ int _create_packet_1(unsigned char* p, unsigned char g_id, unsigned char p_id, u
   unsigned char type = 1;
   unsigned int npk = 0;
   unsigned char xor = 0;
-  unsigned char N_LEN = 1 + 1 + 4*5; /* 2 times 1 byte, 5 times 4 bytes */
+  unsigned int N_LEN = 1 + 1 + 4*5; /* 2 times 1 byte, 5 times 4 bytes */
   int esc = 0; /* escape count */
 
   /* p header */
@@ -73,7 +73,7 @@ int _create_packet_2(unsigned char* p, unsigned char g_id, unsigned char p_id, u
   unsigned char type = 2, byte3 = 0;
   unsigned int npk = 0;
   unsigned char xor = 0;
-  unsigned char N_LEN = 1 + 1 + 1;
+  unsigned int N_LEN = 1 + 1 + 1;
   int esc = 0, ready = 0;
   if (r_char == 1) ready = 1;
 
@@ -172,8 +172,9 @@ int _create_packet_3(unsigned char* p, unsigned char g_id, client_struct** clien
   const unsigned char type = 3;
   unsigned char xor = 0;
   int esc = 0, c_total_len = 0, client_count = 0;
+
   int esc_cl = _packet3_helper_process_clients(clients, &client_count, p_user_data, &c_total_len, &xor); /* process all clients */
-  const unsigned char N_LEN = (c_total_len - esc_cl) + 1 + 2 + 2 + 8*n_dots + 4;
+  const unsigned int N_LEN = (c_total_len - esc_cl) + 1 + 2 + 2 + 8*n_dots + 4;
 
   /* p header */
   int h_size = 11;
@@ -202,7 +203,7 @@ int _create_packet_4(unsigned char *p, unsigned char *g_id, unsigned char *p_id,
   /* chars w,a,s,d each represents whether key is pressed... 1 - pressed, 0 - not pressed */
   unsigned char type = 4, byte3 = 0;
   unsigned char xor = 0;
-  unsigned char N_LEN = 1 + 1 + 1;
+  unsigned int N_LEN = 1 + 1 + 1;
   int esc = 0;
 
   /* p header */
@@ -234,7 +235,7 @@ int _create_packet_5(unsigned char* p, unsigned char g_id, unsigned char p_id, u
   unsigned char type = 5;
   unsigned int npk = 0;
   unsigned char xor = 0;
-  unsigned char N_LEN = 1 + 1 + 4 + 4;
+  unsigned int N_LEN = 1 + 1 + 4 + 4;
   int esc = 0;
 
   /* p header */
@@ -294,7 +295,7 @@ int _create_packet_6(unsigned char* p, unsigned char g_id, client_struct** clien
   unsigned char xor = 0;
   int esc = 0, c_total_len = 0, client_count = 0;
   int esc_cl = _packet6_helper_process_clients(clients, &client_count, p_user_data, &c_total_len, &xor); /* process all clients */
-  const unsigned char N_LEN = 1 + 1 + 4 + 2 + (c_total_len - esc_cl);
+  const unsigned int N_LEN = 1 + 1 + 4 + 2 + (c_total_len - esc_cl);
   unsigned int npk = 0;
 
   /* p header */
@@ -323,7 +324,7 @@ int _create_packet_7(unsigned char* p, unsigned char g_id, unsigned char p_id, c
   unsigned char xor = 0;
   unsigned int npk = 0, message_l = strlen(message);
   int esc = 0;
-  const unsigned char N_LEN = message_l + 4;
+  const unsigned int N_LEN = message_l + 4;
 
   /* p header */
   int h_size = 11;
@@ -724,11 +725,9 @@ int recv_byte (
     /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
   	if (receive > 0) { /* received byte */
       if (rec_byte[0] == 0) { /* divisor */
-        /* print_one_byte(rec_byte[0]); */
         receive = recv(socket, rec_byte, 1, 0);
         /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
         if (receive > 0) { /* received successfully */
-          /* print_one_byte(rec_byte[0]); */
           if (rec_byte[0] == 0) { /* new packet */
           } else {
             printf("[WARNING] Packet did not end with 00\n");
@@ -783,15 +782,15 @@ int recv_byte (
   }
 
   receive = recv(socket, rec_byte, 1, 0);
-  /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
 	if (receive > 0) { /* received byte */
-    if (rec_byte[0] == 0) { /* divisor */
+        /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
+
+        if (rec_byte[0] == 0) { /* divisor */
       /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
       receive = recv(socket, rec_byte, 1, 0);
-      /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
       if (receive > 0) { /* received successfully */
-        /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
-        if (rec_byte[0] == 0) { /* new packet */
+          /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
+          if (rec_byte[0] == 0) { /* new packet */
           if (*packet_status > 0) {/* previous packet should have been finished => error */
             printf("[WARNING] SHOULD NOT HAPPEN.\n");
             /* continue; */
@@ -817,15 +816,13 @@ int recv_byte (
 
       if (rec_byte[0] == 1) {
         receive = recv(socket, rec_byte, 1, 0);
-        /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
         if (receive > 0) { /* received successfully */
-          if (rec_byte[0] == 2) { /* new packet */
-              /* print_one_byte(0); */
+            /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
+            if (rec_byte[0] == 2) { /* new packet */
               packet_in[*packet_cursor] = 0; /* 12 is escaped 0 */
               (*packet_cursor)++;
               /* continue; */
           } else if (rec_byte[0] == 3) {
-            /* print_one_byte(1); */
             packet_in[*packet_cursor] = 1; /* 13 is escaped 1 */
             (*packet_cursor)++;
             /* continue; */
@@ -838,7 +835,6 @@ int recv_byte (
           return -1;
         }
       } else {
-        /* print_one_byte(rec_byte[0]); */
         packet_in[*packet_cursor] = rec_byte[0];
         (*packet_cursor)++;
       }
@@ -847,8 +843,8 @@ int recv_byte (
   } else {
     if (client_status && (*client_status == 9 || *client_status == 10))
       return -1;
-    printf("[WARNING] Error recv. Smth.\n");
-    return -1;
+    /* printf("[WARNING] Error recv. Smth.\n"); */
+    /* return -1; */
   }
 
     return 1; /* success */

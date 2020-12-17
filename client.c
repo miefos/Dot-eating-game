@@ -83,9 +83,9 @@ void* send_loop(void* arg) {
 
       /* sending packet 2 */
       unsigned char p[MAX_PACKET_SIZE];
-      int packet_size = _create_packet_2(p, current_game->g_id, client->ID, ready);
+      int p_size = _create_packet_2(p, current_game->g_id, client->ID, ready);
 
-      if (send_prepared_packet(p, packet_size, *client_socket) < 0) {
+      if (send_prepared_packet(p, p_size, *client_socket) < 0) {
         printf("[ERROR] Packet 2 could not be sent.\n");
       } else {
         printf("[OK] Packet 2 sent successfully.\n");
@@ -96,17 +96,10 @@ void* send_loop(void* arg) {
     else if (client_status == 8) {
       unsigned char p[MAX_PACKET_SIZE];
 
-      /* send 7th packet */
-      int p_size1 =  _create_packet_7(p, current_game->g_id, client->ID, "I decided to send you an update about my keypresses.");
-      if (send_prepared_packet(p, p_size1, *client_socket) < 0) {
-        printf("[ERROR] Packet 7 could not be sent.\n");
-      } else {
-        printf("[OK] Packet 7 sent successfully.\n");
-      }
-
       unsigned char wasd[4] = {0};
       updateKeysPressed(wasd);
       int p_size = _create_packet_4(p, &current_game->g_id, &client->ID, wasd[0], wasd[1], wasd[2], wasd[3], npk);
+      npk++;
       if (send_prepared_packet(p, p_size, *client_socket) < 0) {
         printf("[ERROR] Packet 4 could not be sent.\n");
       } else {

@@ -102,11 +102,11 @@ void* process_client(void* arg){
 
     if ((result = recv_byte(packet_in, &packet_cursor, &current_packet_data_size, &packet_status, 1, client, -1, NULL, NULL, &process_packet_thread, current_game, NULL, NULL)) > 0) {
         /* everything done in recv_byte already... */
-    } else if (result < 0){ /* disconnection or error */
+    } else if (result < 0){ /* error */
         printf("[WARNING] From %s could not receive packet.\n", client->username);
-        client_leave_flag = 1;
-    } else { /* receive == 0 */
-        printf("Recv failed. Client leave flag set.\n");
+        /* client_leave_flag = 1; */
+    } else { /* recv == 0 => disconnected */
+        printf("%s disconnected.\n", client->username);
         client_leave_flag = 1;
     }
 
@@ -337,9 +337,9 @@ int gameloop() {
         }
     }
 
-    int packet_size = _create_packet_3(p, current_game->g_id, clients, current_game->active_dots, dots, current_game->time_left, npk);
-    send_packet_to_all(p, packet_size, 1, 3); /* should have return val... */
-
+    int p_size = _create_packet_3(p, current_game->g_id, clients, current_game->active_dots, dots, current_game->time_left, npk);
+    send_packet_to_all(p, p_size, 1, 3); /* should have return val... */
+    npk++;
     nsleep(1000*time_to_sleep);
   }
 
