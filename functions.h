@@ -51,6 +51,7 @@ typedef struct {
   unsigned int initial_size;
   unsigned int max_y, max_x;
   unsigned int max_lives;
+  unsigned int active_dots;
   int clients_active; /* Please do use this only in client side.. Not initialized in server */
   /* probably can use client_count in server if really needed but check .. */
 } game;

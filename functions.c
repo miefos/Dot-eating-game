@@ -465,12 +465,16 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
   /* get PLAYER DATA */
   /* printf("\n=== PLAYERS IN GAME === \n"); */
   for(i=0; i < n_players; ++i) {
-    //* malloc client */
-    client_struct* client = (client_struct *) malloc(sizeof(client_struct));
-    if (client == NULL) {
-      printf("[WARNING] Malloc did not work. Cannot create client in packet receiving.\n");
-      return -1;
-    }
+      if (!clients[i]) {
+          //* malloc client ONLY if not mallocated already before */
+          clients[i] = (client_struct *) malloc(sizeof(client_struct));
+          if (clients[i] == NULL) {
+              printf("[WARNING] Malloc did not work. Cannot create client in packet receiving.\n");
+              return -1;
+          }
+      }
+
+    client_struct* client = clients[i];
 
     client->ID = p[3 + total_client_len];
     name_l = p[4 + total_client_len];
@@ -484,8 +488,6 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
     client->score = get_int_from_4bytes_lendian(&p[23 + total_client_len + name_l]); /* 4 bytes */
     client->lives = get_int_from_4bytes_lendian(&p[27 + total_client_len + name_l]); /* 4 bytes */
 
-    clients[i] = client;
-
     /*printf("%d: %s (id=%d, #%s), x=%f, y=%f, size=%d, score=%d, lives=%d\n",
       i+1, client->username, client->ID, client->color, client->x, client->y, client->size, client->score, client->lives);
 */
@@ -495,23 +497,20 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
   n_dots = get_sh_int_2bytes_lendian(&p[3 + total_client_len]); /* 2 bytes */
 
   /* get DOT DATA */
-  for (i=0; i < MAX_DOTS; i++) {
-      if (dots[i])
-          dots[i] = NULL;
-  }
+  current_game->active_dots = n_dots;
 
   for(i=0; i < n_dots; ++i) {
-    /* malloc dot */
-    dot* somedot = (dot *) malloc(sizeof(dot));
-    if (somedot == NULL) {
-      printf("[WARNING] Malloc did not work. Cannot create dot in packet receiving.\n");
-      return -1;
-    }
+      if (!dots[i]) {
+          /* malloc dot ONLY if not mallocated already before */
+          dots[i] = (dot *) malloc(sizeof(dot));
+          if (dots[i] == NULL) {
+              printf("[WARNING] Malloc did not work. Cannot create dot in packet receiving.\n");
+              return -1;
+          }
+      }
 
-    somedot->x = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + i*8]); /* 4 bytes */
-    somedot->y = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + i*8 + 4]); /* 4 bytes */
-
-    dots[i] = somedot;
+    dots[i]->x = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + i*8]); /* 4 bytes */
+    dots[i]->y = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + i*8 + 4]); /* 4 bytes */
   }
 
   /* print DOT DATA */

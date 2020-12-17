@@ -194,6 +194,8 @@ int main(int argc, char **argv){
   }
   client->has_introduced = 0;
 
+
+
   /* malloc game */
     if ((current_game = (game*) malloc(sizeof(game))) == NULL) {
         printf("[ERROR] Cannot malloc game.\n");
@@ -402,7 +404,7 @@ int main(int argc, char **argv){
 
               /* print dots */
               unsigned int dcount;
-              for (dcount = 0; dcount < MAX_DOTS; dcount++) {
+              for (dcount = 0; dcount < current_game->active_dots; dcount++) {
                   if (dots[dcount])
                     DrawCircle(dots[dcount]->x, dots[dcount]->y, CIRCLE_RADIUS, RED);
               }
