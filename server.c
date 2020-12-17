@@ -24,6 +24,7 @@
 game *current_game;
 
 int client_count = 0;
+unsigned int npk = 0; /* for packet 3 only */
 int curr_n_dots = MAX_DOTS;
 int ID = 0; /* player id */
 client_struct* clients[MAX_CLIENTS];
@@ -180,7 +181,6 @@ int gameloop() {
           break;
       }
 
-      /* smth not working on new dot creation.. */
       /* if field not full, 0.5% chance to create new dot */
       if (curr_n_dots < MAX_DOTS && GetRandomValue(0, 200) == 1) {
           int dc;
@@ -201,33 +201,33 @@ int gameloop() {
       }
 
 
-      if(current_game->clients_active == 1){
-          game_start_time = clock();
-      }
-      else{
-          game_time_update += (clock() - game_start_time) / CLOCKS_PER_SEC;
-          if (game_time_update >= 1) { /* when 1 sec reached */
-            if (current_game->time_left >= 1)
-              current_game->time_left -= 1;
-            else { /* TIME OUT - game ended */
-              set_leave_flag();
-              continue;
-            }
-            game_time_update = 0;
-        }
-      }
+//      if(current_game->clients_active == 1){ /* ROBERTS - see note in game declaration in functions.h */
+//          game_start_time = clock();
+//      }
+//      else{
+//          game_time_update += (clock() - game_start_time) / CLOCKS_PER_SEC;
+//          if (game_time_update >= 1) { /* when 1 sec reached */
+//            if (current_game->time_left >= 1)
+//              current_game->time_left -= 1;
+//            else { /* TIME OUT - game ended */
+//              set_leave_flag();
+//              continue;
+//            }
+//            game_time_update = 0;
+//        }
+//      }
 
       /* game time */
-    //   game_time_update += time_to_sleep;
-    //   if (game_time_update >= 1) { /* when 1 sec reached */
-    //       if (current_game->time_left >= 1)
-    //           current_game->time_left -= 1;
-    //       else { /* TIME OUT - game ended */
-    //           set_leave_flag();
-    //           continue;
-    //       }
-    //       game_time_update = 0;
-    //   }
+       game_time_update += time_to_sleep;
+       if (game_time_update >= 1) { /* when 1 sec reached */
+           if (current_game->time_left >= 1)
+               current_game->time_left -= 1;
+           else { /* TIME OUT - game ended */
+               set_leave_flag();
+               continue;
+           }
+           game_time_update = 0;
+       }
 
     int i;
     for(i=0; i < MAX_CLIENTS; ++i) {
@@ -361,7 +361,7 @@ int gameloop() {
         }
     }
 
-    int packet_size = _create_packet_3(p, current_game->g_id, clients, curr_n_dots, dots, current_game->time_left);
+    int packet_size = _create_packet_3(p, current_game->g_id, clients, curr_n_dots, dots, current_game->time_left, npk++);
     send_packet_to_all(p, packet_size, 1, 3); /* should have return val... */
 
     nsleep(1000*time_to_sleep);

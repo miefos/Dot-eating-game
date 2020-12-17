@@ -167,16 +167,13 @@ int _packet3_helper_process_clients(client_struct** clients, int* n_clients, uns
   return esc_total; /* used only for N_LEN */
 }
 
-int _create_packet_3(unsigned char* p, unsigned char g_id, client_struct** clients, unsigned short int n_dots, dot** dots, unsigned int time_left) {
+int _create_packet_3(unsigned char* p, unsigned char g_id, client_struct** clients, unsigned short int n_dots, dot** dots, unsigned int time_left, unsigned int npk) {
   unsigned char p_user_data[MAX_PACKET_SIZE];
   const unsigned char type = 3;
   unsigned char xor = 0;
   int esc = 0, c_total_len = 0, client_count = 0;
   int esc_cl = _packet3_helper_process_clients(clients, &client_count, p_user_data, &c_total_len, &xor); /* process all clients */
   const unsigned char N_LEN = (c_total_len - esc_cl) + 1 + 2 + 2 + 8*n_dots + 4;
-
-  /* should be implemented real */
-  unsigned int npk = 0;
 
   /* p header */
   int h_size = 11;
@@ -201,15 +198,12 @@ int _create_packet_3(unsigned char* p, unsigned char g_id, client_struct** clien
 }
 
 
-int _create_packet_4(unsigned char *p, unsigned char *g_id, unsigned char *p_id, char w, char a, char s, char d) {
+int _create_packet_4(unsigned char *p, unsigned char *g_id, unsigned char *p_id, char w, char a, char s, char d, unsigned int npk) {
   /* chars w,a,s,d each represents whether key is pressed... 1 - pressed, 0 - not pressed */
   unsigned char type = 4, byte3 = 0;
   unsigned char xor = 0;
   unsigned char N_LEN = 1 + 1 + 1;
   int esc = 0;
-
-  /* should be implemented real npk */
-  unsigned int npk = 0;
 
   /* p header */
   int h_size = 11;
