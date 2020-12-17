@@ -364,11 +364,11 @@ int process_packet_0(unsigned char* p_dat, client_struct* client, game *current_
 
   if (name_l != strlen(username) || strlen(color) != 6) {
     printf("[ERROR] err processing packet 0. \n");
-    printf("username[%ld=%d] = %s, color = %s\n", strlen(username), name_l, username, color);
+    /* printf("username[%ld=%d] = %s, color = %s\n", strlen(username), name_l, username, color); */
     return -1;
   }
   /* printf("[OK] Process packet function assigned: username = %s, color = %s\n", username, color); */
-  printf("[OK] Client username = %s, client color = %s (cstruct)\n", client->username, client->color);
+  /* printf("[OK] Client username = %s, client color = %s (cstruct)\n", client->username, client->color); */
 
   /* sending packet 1 */
   unsigned char p[MAX_PACKET_SIZE];
@@ -378,10 +378,10 @@ int process_packet_0(unsigned char* p_dat, client_struct* client, game *current_
   int packet_size = _create_packet_1(p, g_id, p_id, INIT_SIZE, MAX_X, MAX_Y, TIME_LIM, INIT_LIVES);
 
   if (send_prepared_packet(p, packet_size, client->socket) < 0) {
-    printf("[ERROR] Packet 1 could not be sent.\n");
+    /* printf("[ERROR] Packet 1 could not be sent.\n"); */
       return -1;
   } else {
-    printf("[SEND PACKET 1] Success.\n");
+    /* printf("[SEND PACKET 1] Success.\n"); */
   }
 
   return 0;
@@ -407,9 +407,9 @@ int process_packet_1(unsigned char* p_dat, int *client_status, game *current_gam
   client->size = p_init_size;
   client->lives = num_of_lives;
 
-  printf("[REC PACKET 1] Game ID = %d, Player ID = %d, p_init_size = %d, field size (%d, %d), time %d, lives %d\n",
+  /* printf("[REC PACKET 1] Game ID = %d, Player ID = %d, p_init_size = %d, field size (%d, %d), time %d, lives %d\n",
           current_game->g_id, client->ID, p_init_size, max_x, max_y, time_limit, num_of_lives);
-
+*/
   *client_status = 5;
 
   return 0;
@@ -424,8 +424,8 @@ int process_packet_2(unsigned char* p_dat, client_struct* client, game *current_
   int ready_bitNumber = 2; /* from left */
   ready = get_bit(byte3, ready_bitNumber);
 
-  printf("[REC PACKET 2] g_id = %d, p_id = %d, byte 3 = %d, ready = %d\n", g_id, p_id, byte3, ready);
-
+  /* printf("[REC PACKET 2] g_id = %d, p_id = %d, byte 3 = %d, ready = %d\n", g_id, p_id, byte3, ready);
+*/
     if (g_id != current_game->g_id || p_id != client->ID) {
         printf("There was mistake in packet2.\n");
     }
@@ -441,12 +441,12 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
   unsigned int time_left;
   /* client_struct* clients[MAX_CLIENTS]; */
 
-  printf("[REC PACKET 3]\n");
+  /* printf("[REC PACKET 3]\n"); */
 
   /* if packet 3 received, set player to ready state (done by server, client should adapt - that is why this function here)... */
   if (*client_status == 5) {
     *client_status = 6;
-    printf("Client status set to 6 from 5 although player did not get ready...\n");
+    /* printf("Client status set to 6 from 5 although player did not get ready...\n"); */
   }
 
   int name_l, total_client_len = 0;
@@ -463,9 +463,9 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
     int i;
 
   /* get PLAYER DATA */
-  printf("\n=== PLAYERS IN GAME === \n");
+  /* printf("\n=== PLAYERS IN GAME === \n"); */
   for(i=0; i < n_players; ++i) {
-    /* malloc client */
+    //* malloc client */
     client_struct* client = (client_struct *) malloc(sizeof(client_struct));
     if (client == NULL) {
       printf("[WARNING] Malloc did not work. Cannot create client in packet receiving.\n");
@@ -486,9 +486,9 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
 
     clients[i] = client;
 
-    printf("%d: %s (id=%d, #%s), x=%f, y=%f, size=%d, score=%d, lives=%d\n",
+    /*printf("%d: %s (id=%d, #%s), x=%f, y=%f, size=%d, score=%d, lives=%d\n",
       i+1, client->username, client->ID, client->color, client->x, client->y, client->size, client->score, client->lives);
-
+*/
       total_client_len += 30 + name_l - 3 + 1;
   }
 
@@ -515,11 +515,12 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
   }
 
   /* print DOT DATA */
+  /*
   printf("\n=== DOTS === \n");
   for(i=0; i < n_dots; ++i) {
     if (i == n_dots - 1) printf("[%d, %d]\n", dots[i]->x, dots[i]->y);
     else printf("[%d, %d], ", dots[i]->x, dots[i]->y);
-  }
+  } */
 
   time_left = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + n_dots*8]); /* 4 bytes */
   current_game->time_left = time_left;
@@ -529,7 +530,7 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
       *client_status = 8;
   }
 
-  printf("\n");
+  /* printf("\n"); */
 
   return 0;
 }
@@ -537,55 +538,17 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
 int process_packet_4(unsigned char* p_dat, client_struct* client) {
   /* unsigned char g_id, p_id; */
   unsigned char byte3;
-  char w, a, s, d;
 
   char w_pos = 3, a_pos = 2, s_pos = 1, d_pos = 0; /* bitNumber, see get_bit */
   /* g_id = p_dat[0];
   p_id = p_dat[1]; */
   byte3 = p_dat[2];
-    w = (client->wasd[0] = get_bit(byte3, w_pos)); /* W pressed*/
-    a = (client->wasd[1] = get_bit(byte3, a_pos)); /* A pressed */
-    s = (client->wasd[2] = get_bit(byte3, s_pos)); /* S pressed */
-    d = (client->wasd[3] = get_bit(byte3, d_pos)); /* D pressed */
+  client->wasd[0] = get_bit(byte3, w_pos); /* W pressed*/
+  client->wasd[1] = get_bit(byte3, a_pos); /* A pressed */
+  client->wasd[2] = get_bit(byte3, s_pos); /* S pressed */
+  client->wasd[3] = get_bit(byte3, d_pos); /* D pressed */
 
-  /*
-  int *x = (int *) &client->x;
-  int *y = (int *) &client->y;
-
-  int min_x = BORDER_SIZE + getRadius(client) + 1;
-  int max_x = MAX_X - (BORDER_SIZE + getRadius(client));
-  int min_y = BORDER_SIZE + getRadius(client) + 1;
-  int max_y = MAX_Y - (BORDER_SIZE + getRadius(client));
-
-  if (w) {
-      if ((*y - SPEED*delta) > min_y)
-          *y -= SPEED*delta;
-      else
-          *y = min_y;
-  }
-
-    if (s) {
-        if ((*y + SPEED*delta) < max_y)
-            *y += SPEED*delta;
-        else
-            *y = max_y;
-    }
-
-    if (a) {
-        if ((*x - SPEED*delta) > min_x)
-            *x -= SPEED*delta;
-        else
-            *x = min_x;
-    }
-
-    if (d) {
-        if ((*x + SPEED*delta) < max_x)
-            *x += SPEED*delta;
-        else
-            *x = max_x;
-    }
-*/
-  printf("[REC PACKET 4] pressed(w,a,s,d)=(%d,%d,%d,%d), client=%d\n", w, a, s, d, client->ID);
+/*   printf("[REC PACKET 4] pressed(w,a,s,d)=(%d,%d,%d,%d), client=%d\n", w, a, s, d, client->ID); */
 
   return 0;
 }
