@@ -72,30 +72,47 @@ Installing Raylib
    ```
 3. Make the library
    ```sh
-   make PLATFORM=PLATFORM_DESKTOP
+   make PLATFORM=PLATFORM_DESKTOP RAYLIB_LIBTYPE=SHARED # To make the dynamic shared version. - Recommended
    ```
-4. Install the library
+4. Install the library to the standard directories, usr/local/lib and /usr/local/include
+    ```sh
+    sudo make install RAYLIB_LIBTYPE=SHARED # Dynamic shared version.
+    ```
+5. Install the library
    ```sh
    sudo make install
    ```
+   
+The simplest possible build command
+    ```sh
+    cc main.c -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
+    ```
 
+For a more detailed installation you can check: https://github.com/raysan5/raylib/wiki/Working-on-GNU-Linux
 
 
 ## Gameplay
 <img src="visuals/eatingdotsgame.gif" alt="Gamemplay gif" title="Gameplay" width="500"/>
 
 
-## Achievments
+## Division
+The first and second part of the project we created seperately (basic networking, prototype).
+For the final game we combined best of our previous work to achieve the best result. 
 
-Beautiful gui 
+Work done by:
+[Martins Ciekurs](https://github.com/miefos),
+[Roberts Rigacovs](https://github.com/Goodguyr)
 
 
 ## Problems
-None
+1) It was hard to manage the workflow, combining our individually created servers and clients. 
+2) unsigned char instead of unsigned int caused many problems and was hard to find the cause of problems.
+3) Many more.
 
 
-## Division
-Work done by:
-[Martins Ciekurs](LinkPlaceHolder),
-[Roberts Rigacovs](https://github.com/Goodguyr)
+## Achievments
+1) Beautiful gui; 
+2) working game;
+3) a lot learned during process.
+
 
