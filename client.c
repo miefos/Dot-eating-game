@@ -321,19 +321,18 @@ int main(int argc, char **argv){
           if (IsKeyPressed(KEY_ENTER)) {
               if (client_status == 0 && letterCount > 0) {
                   client_status = 1;
+                  letterCount = 0;
               } else if (client_status == 1 && letterCount == MAX_COLOR_CHARS) { /* only if color = 6 chars */
                   strcpy(client->username, name);
                   strcpy(client->color, color);
                   client_status = 2;
+                  letterCount = 0;
                   /* sending 0th packet (in send loop), it sends because c_status = 2 */
               }
-              letterCount = 0;
           }
-
-          drawUnderscoreDelMessage(letterCount, client_status, textBox, name, color, font_size, showFromPosition, framesCounter);
       }
 
-        if (client_status == 0) {
+      if (client_status == 0) {
               DrawRectangleRec(textBox, LIGHTGRAY);
               DrawText(TextFormat("Please Enter Your Username"), text_box_x_pos, text_box_y_pos - font_size*1.5, font_size/2, DARKGRAY);
               DrawText(TextFormat("Input chars: %i/%i", letterCount, MAX_USERNAME_CHARS), text_box_x_pos, text_box_y_pos + 70, font_size/4, DARKGRAY);
@@ -411,6 +410,9 @@ int main(int argc, char **argv){
           else if (client_status == 10) {
               DrawText(TextFormat("Game ended!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY);
           }
+
+      drawUnderscoreDelMessage(letterCount, client_status, textBox, name, color, font_size, showFromPosition, framesCounter);
+
 
       EndDrawing();
   }
