@@ -24,7 +24,7 @@
 game *current_game;
 
 int client_count = 0;
-int curr_n_dots = MAX_DOTS;
+unsigned int npk = 0; /* for packet 3 only */
 int ID = 0; /* player id */
 client_struct* clients[MAX_CLIENTS];
 
@@ -71,6 +71,7 @@ int main(int argc, char **argv) {
     }
     current_game->g_id = 222;
     current_game->time_left = TIME_LIM;
+    current_game->active_dots = MAX_DOTS;
   /* server setup */
   int port;
   if (server_parse_args(argc, argv, &port) < 0) return -1;
@@ -96,16 +97,16 @@ void* process_client(void* arg){
 
 	client_struct* client = (client_struct *) arg;
 
-	while(1){
+	while (1) {
     if (client_leave_flag) break;
 
     if ((result = recv_byte(packet_in, &packet_cursor, &current_packet_data_size, &packet_status, 1, client, -1, NULL, NULL, &process_packet_thread, current_game, NULL, NULL)) > 0) {
         /* everything done in recv_byte already... */
-    } else if (result < 0){ /* disconnection or error */
+    } else if (result < 0){ /* error */
         printf("[WARNING] From %s could not receive packet.\n", client->username);
-        client_leave_flag = 1;
-    } else { /* receive == 0 */
-        printf("Recv failed. Client leave flag set.\n");
+        /* client_leave_flag = 1; */
+    } else { /* recv == 0 => disconnected */
+        printf("%s disconnected.\n", client->username);
         client_leave_flag = 1;
     }
 
@@ -180,9 +181,8 @@ int gameloop() {
           break;
       }
 
-      /* smth not working on new dot creation.. */
-      /* if field not full, 0.5% chance to create new dot */
-      if (curr_n_dots < MAX_DOTS && GetRandomValue(0, 200) == 1) {
+      /* if field not full, 4% chance to create new dot */
+      if (current_game->active_dots < MAX_DOTS && GetRandomValue(0, 25) == 1) {
           int dc;
           for(dc = 0; dc < MAX_DOTS; dc++) {
               if (!dots[dc]) {
@@ -194,45 +194,45 @@ int gameloop() {
                   some_dot->x = GetRandomValue(BORDER_SIZE + CIRCLE_RADIUS, MAX_X - BORDER_SIZE - CIRCLE_RADIUS);
                   some_dot->y = GetRandomValue(BORDER_SIZE + CIRCLE_RADIUS, MAX_X - BORDER_SIZE - CIRCLE_RADIUS);
                   dots[dc] = some_dot;
-                  curr_n_dots++;
+                  current_game->active_dots++;
                   break;
               }
           }
       }
 
 
-      if(current_game->clients_active == 1){
-          game_start_time = clock();
-      }
-      else{
-          game_time_update += (clock() - game_start_time) / CLOCKS_PER_SEC;
-          if (game_time_update >= 1) { /* when 1 sec reached */
-            if (current_game->time_left >= 1)
-              current_game->time_left -= 1;
-            else { /* TIME OUT - game ended */
-              set_leave_flag();
-              continue;
-            }
-            game_time_update = 0;
-        }
-      }
+//      if(current_game->clients_active == 1){ /* ROBERTS - see note in game declaration in functions.h */
+//          game_start_time = clock();
+//      }
+//      else{
+//          game_time_update += (clock() - game_start_time) / CLOCKS_PER_SEC;
+//          if (game_time_update >= 1) { /* when 1 sec reached */
+//            if (current_game->time_left >= 1)
+//              current_game->time_left -= 1;
+//            else { /* TIME OUT - game ended */
+//              set_leave_flag();
+//              continue;
+//            }
+//            game_time_update = 0;
+//        }
+//      }
 
       /* game time */
-    //   game_time_update += time_to_sleep;
-    //   if (game_time_update >= 1) { /* when 1 sec reached */
-    //       if (current_game->time_left >= 1)
-    //           current_game->time_left -= 1;
-    //       else { /* TIME OUT - game ended */
-    //           set_leave_flag();
-    //           continue;
-    //       }
-    //       game_time_update = 0;
-    //   }
+       game_time_update += time_to_sleep;
+       if (game_time_update >= 1) { /* when 1 sec reached */
+           if (current_game->time_left >= 1)
+               current_game->time_left -= 1;
+           else { /* TIME OUT - game ended */
+               set_leave_flag();
+               continue;
+           }
+           game_time_update = 0;
+       }
 
     int i;
     for(i=0; i < MAX_CLIENTS; ++i) {
         if(clients[i] && clients[i]->has_introduced && clients[i]->lives > 0) {
-            /* check if got food */
+            /* check if got food (dot) */
             int j;
             for(j = 0; j < MAX_DOTS; j++){
                 if (dots[j]) {
@@ -245,11 +245,9 @@ int gameloop() {
                     if (collisionDetected) {
                         clients[i]->size += CIRCLE_RADIUS*N_POINTS_FOR_C_RADIUS_UNIT;
                         clients[i]->score += CIRCLE_RADIUS*N_POINTS_FOR_C_RADIUS_UNIT;
-                        /* dots[j]->x = 0;
-                        dots[j]->y = 0; */
                         free(dots[j]);
                         dots[j] = NULL;
-                        curr_n_dots--;
+                        current_game->active_dots--;
                     }
                 }
             }
@@ -306,42 +304,20 @@ int gameloop() {
             float *x = &clients[i]->x;
             float *y = &clients[i]->y;
 
-            float min_x = BORDER_SIZE + getRadius(clients[i]) + 1;
-            float max_x = MAX_X - (BORDER_SIZE + getRadius(clients[i]));
-            float min_y = BORDER_SIZE + getRadius(clients[i]) + 1;
-            float max_y = MAX_Y - (BORDER_SIZE + getRadius(clients[i]));
+            float border_radius = BORDER_SIZE + getRadius(clients[i]);
+
+            float min_x = border_radius + 1;
+            float max_x = MAX_X - border_radius;
+            float min_y = border_radius + 1;
+            float max_y = MAX_Y - border_radius;
 
             float speed = SPEED - SIZE_SPEED_COEFFICIENT * clients[i]->size;
-            if(speed < SPEED / 10) speed = SPEED * 0.1;
+            if (speed < MIN_SPEED) speed = MIN_SPEED;
 
-            if (w) {
-                if ((*y - speed*delta) > min_y)
-                    *y -= speed*delta;
-                else
-                    *y = min_y;
-            }
-
-            if (s) {
-                if ((*y + speed*delta) < max_y) {
-                    *y += speed * delta;
-                }
-                else
-                    *y = max_y;
-            }
-
-            if (a) {
-                if ((*x - speed*delta) > min_x)
-                    *x -= speed*delta;
-                else
-                    *x = min_x;
-            }
-
-            if (d) {
-                if ((*x + speed*delta) < max_x)
-                    *x += speed*delta;
-                else
-                    *x = max_x;
-            }
+            if (w) *y = (*y - speed*delta > min_y) ? *y - speed*delta : min_y;
+            if (s) *y = (*y + speed*delta < max_y) ? *y + speed*delta : max_y;
+            if (a) *x = (*x - speed*delta > min_x) ? *x - speed*delta : min_x;
+            if (d) *x = (*x + speed*delta < max_x) ? *x + speed*delta : max_x;
 
             /* update connection time */
             clients[i]->connected_time += time_to_sleep;
@@ -361,9 +337,9 @@ int gameloop() {
         }
     }
 
-    int packet_size = _create_packet_3(p, current_game->g_id, clients, curr_n_dots, dots, current_game->time_left);
-    send_packet_to_all(p, packet_size, 1, 3); /* should have return val... */
-
+    int p_size = _create_packet_3(p, current_game->g_id, clients, current_game->active_dots, dots, current_game->time_left, npk);
+    send_packet_to_all(p, p_size, 1, 3); /* should have return val... */
+    npk++;
     nsleep(1000*time_to_sleep);
   }
 

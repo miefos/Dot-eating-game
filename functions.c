@@ -17,7 +17,7 @@ int _create_packet_0(unsigned char* p, char* name, char* color) {
   unsigned int npk = 0;
   unsigned char xor = 0;
   unsigned char name_l = (unsigned char) strlen(name);
-  unsigned char N_LEN = name_l + 1 + 6; /* 1 - name_l, 6 - color */
+  unsigned int N_LEN = name_l + 1 + 6; /* 1 - name_l, 6 - color */
   int esc = 0; /* escape count */
 
   /* p header */
@@ -43,7 +43,7 @@ int _create_packet_1(unsigned char* p, unsigned char g_id, unsigned char p_id, u
   unsigned char type = 1;
   unsigned int npk = 0;
   unsigned char xor = 0;
-  unsigned char N_LEN = 1 + 1 + 4*5; /* 2 times 1 byte, 5 times 4 bytes */
+  unsigned int N_LEN = 1 + 1 + 4*5; /* 2 times 1 byte, 5 times 4 bytes */
   int esc = 0; /* escape count */
 
   /* p header */
@@ -73,7 +73,7 @@ int _create_packet_2(unsigned char* p, unsigned char g_id, unsigned char p_id, u
   unsigned char type = 2, byte3 = 0;
   unsigned int npk = 0;
   unsigned char xor = 0;
-  unsigned char N_LEN = 1 + 1 + 1;
+  unsigned int N_LEN = 1 + 1 + 1;
   int esc = 0, ready = 0;
   if (r_char == 1) ready = 1;
 
@@ -167,16 +167,14 @@ int _packet3_helper_process_clients(client_struct** clients, int* n_clients, uns
   return esc_total; /* used only for N_LEN */
 }
 
-int _create_packet_3(unsigned char* p, unsigned char g_id, client_struct** clients, unsigned short int n_dots, dot** dots, unsigned int time_left) {
+int _create_packet_3(unsigned char* p, unsigned char g_id, client_struct** clients, unsigned short int n_dots, dot** dots, unsigned int time_left, unsigned int npk) {
   unsigned char p_user_data[MAX_PACKET_SIZE];
   const unsigned char type = 3;
   unsigned char xor = 0;
   int esc = 0, c_total_len = 0, client_count = 0;
-  int esc_cl = _packet3_helper_process_clients(clients, &client_count, p_user_data, &c_total_len, &xor); /* process all clients */
-  const unsigned char N_LEN = (c_total_len - esc_cl) + 1 + 2 + 2 + 8*n_dots + 4;
 
-  /* should be implemented real */
-  unsigned int npk = 0;
+  int esc_cl = _packet3_helper_process_clients(clients, &client_count, p_user_data, &c_total_len, &xor); /* process all clients */
+  const unsigned int N_LEN = (c_total_len - esc_cl) + 1 + 2 + 2 + 8*n_dots + 4;
 
   /* p header */
   int h_size = 11;
@@ -201,15 +199,12 @@ int _create_packet_3(unsigned char* p, unsigned char g_id, client_struct** clien
 }
 
 
-int _create_packet_4(unsigned char *p, unsigned char *g_id, unsigned char *p_id, char w, char a, char s, char d) {
+int _create_packet_4(unsigned char *p, unsigned char *g_id, unsigned char *p_id, char w, char a, char s, char d, unsigned int npk) {
   /* chars w,a,s,d each represents whether key is pressed... 1 - pressed, 0 - not pressed */
   unsigned char type = 4, byte3 = 0;
   unsigned char xor = 0;
-  unsigned char N_LEN = 1 + 1 + 1;
+  unsigned int N_LEN = 1 + 1 + 1;
   int esc = 0;
-
-  /* should be implemented real npk */
-  unsigned int npk = 0;
 
   /* p header */
   int h_size = 11;
@@ -240,7 +235,7 @@ int _create_packet_5(unsigned char* p, unsigned char g_id, unsigned char p_id, u
   unsigned char type = 5;
   unsigned int npk = 0;
   unsigned char xor = 0;
-  unsigned char N_LEN = 1 + 1 + 4 + 4;
+  unsigned int N_LEN = 1 + 1 + 4 + 4;
   int esc = 0;
 
   /* p header */
@@ -300,7 +295,7 @@ int _create_packet_6(unsigned char* p, unsigned char g_id, client_struct** clien
   unsigned char xor = 0;
   int esc = 0, c_total_len = 0, client_count = 0;
   int esc_cl = _packet6_helper_process_clients(clients, &client_count, p_user_data, &c_total_len, &xor); /* process all clients */
-  const unsigned char N_LEN = 1 + 1 + 4 + 2 + (c_total_len - esc_cl);
+  const unsigned int N_LEN = 1 + 1 + 4 + 2 + (c_total_len - esc_cl);
   unsigned int npk = 0;
 
   /* p header */
@@ -329,7 +324,7 @@ int _create_packet_7(unsigned char* p, unsigned char g_id, unsigned char p_id, c
   unsigned char xor = 0;
   unsigned int npk = 0, message_l = strlen(message);
   int esc = 0;
-  const unsigned char N_LEN = message_l + 4;
+  const unsigned int N_LEN = message_l + 4;
 
   /* p header */
   int h_size = 11;
@@ -370,11 +365,11 @@ int process_packet_0(unsigned char* p_dat, client_struct* client, game *current_
 
   if (name_l != strlen(username) || strlen(color) != 6) {
     printf("[ERROR] err processing packet 0. \n");
-    printf("username[%ld=%d] = %s, color = %s\n", strlen(username), name_l, username, color);
+    /* printf("username[%ld=%d] = %s, color = %s\n", strlen(username), name_l, username, color); */
     return -1;
   }
   /* printf("[OK] Process packet function assigned: username = %s, color = %s\n", username, color); */
-  printf("[OK] Client username = %s, client color = %s (cstruct)\n", client->username, client->color);
+  /* printf("[OK] Client username = %s, client color = %s (cstruct)\n", client->username, client->color); */
 
   /* sending packet 1 */
   unsigned char p[MAX_PACKET_SIZE];
@@ -384,10 +379,10 @@ int process_packet_0(unsigned char* p_dat, client_struct* client, game *current_
   int packet_size = _create_packet_1(p, g_id, p_id, INIT_SIZE, MAX_X, MAX_Y, TIME_LIM, INIT_LIVES);
 
   if (send_prepared_packet(p, packet_size, client->socket) < 0) {
-    printf("[ERROR] Packet 1 could not be sent.\n");
+    /* printf("[ERROR] Packet 1 could not be sent.\n"); */
       return -1;
   } else {
-    printf("[SEND PACKET 1] Success.\n");
+    /* printf("[SEND PACKET 1] Success.\n"); */
   }
 
   return 0;
@@ -413,9 +408,9 @@ int process_packet_1(unsigned char* p_dat, int *client_status, game *current_gam
   client->size = p_init_size;
   client->lives = num_of_lives;
 
-  printf("[REC PACKET 1] Game ID = %d, Player ID = %d, p_init_size = %d, field size (%d, %d), time %d, lives %d\n",
+  /* printf("[REC PACKET 1] Game ID = %d, Player ID = %d, p_init_size = %d, field size (%d, %d), time %d, lives %d\n",
           current_game->g_id, client->ID, p_init_size, max_x, max_y, time_limit, num_of_lives);
-
+*/
   *client_status = 5;
 
   return 0;
@@ -430,8 +425,8 @@ int process_packet_2(unsigned char* p_dat, client_struct* client, game *current_
   int ready_bitNumber = 2; /* from left */
   ready = get_bit(byte3, ready_bitNumber);
 
-  printf("[REC PACKET 2] g_id = %d, p_id = %d, byte 3 = %d, ready = %d\n", g_id, p_id, byte3, ready);
-
+  /* printf("[REC PACKET 2] g_id = %d, p_id = %d, byte 3 = %d, ready = %d\n", g_id, p_id, byte3, ready);
+*/
     if (g_id != current_game->g_id || p_id != client->ID) {
         printf("There was mistake in packet2.\n");
     }
@@ -447,12 +442,12 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
   unsigned int time_left;
   /* client_struct* clients[MAX_CLIENTS]; */
 
-  printf("[REC PACKET 3]\n");
+  /* printf("[REC PACKET 3]\n"); */
 
   /* if packet 3 received, set player to ready state (done by server, client should adapt - that is why this function here)... */
   if (*client_status == 5) {
     *client_status = 6;
-    printf("Client status set to 6 from 5 although player did not get ready...\n");
+    /* printf("Client status set to 6 from 5 although player did not get ready...\n"); */
   }
 
   int name_l, total_client_len = 0;
@@ -469,14 +464,18 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
     int i;
 
   /* get PLAYER DATA */
-  printf("\n=== PLAYERS IN GAME === \n");
+  /* printf("\n=== PLAYERS IN GAME === \n"); */
   for(i=0; i < n_players; ++i) {
-    /* malloc client */
-    client_struct* client = (client_struct *) malloc(sizeof(client_struct));
-    if (client == NULL) {
-      printf("[WARNING] Malloc did not work. Cannot create client in packet receiving.\n");
-      return -1;
-    }
+      if (!clients[i]) {
+          //* malloc client ONLY if not mallocated already before */
+          clients[i] = (client_struct *) malloc(sizeof(client_struct));
+          if (clients[i] == NULL) {
+              printf("[WARNING] Malloc did not work. Cannot create client in packet receiving.\n");
+              return -1;
+          }
+      }
+
+    client_struct* client = clients[i];
 
     client->ID = p[3 + total_client_len];
     name_l = p[4 + total_client_len];
@@ -490,42 +489,38 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
     client->score = get_int_from_4bytes_lendian(&p[23 + total_client_len + name_l]); /* 4 bytes */
     client->lives = get_int_from_4bytes_lendian(&p[27 + total_client_len + name_l]); /* 4 bytes */
 
-    clients[i] = client;
-
-    printf("%d: %s (id=%d, #%s), x=%f, y=%f, size=%d, score=%d, lives=%d\n",
+    /*printf("%d: %s (id=%d, #%s), x=%f, y=%f, size=%d, score=%d, lives=%d\n",
       i+1, client->username, client->ID, client->color, client->x, client->y, client->size, client->score, client->lives);
-
+*/
       total_client_len += 30 + name_l - 3 + 1;
   }
 
   n_dots = get_sh_int_2bytes_lendian(&p[3 + total_client_len]); /* 2 bytes */
 
   /* get DOT DATA */
-  for (i=0; i < MAX_DOTS; i++) {
-      if (dots[i])
-          dots[i] = NULL;
-  }
+  current_game->active_dots = n_dots;
 
   for(i=0; i < n_dots; ++i) {
-    /* malloc dot */
-    dot* somedot = (dot *) malloc(sizeof(dot));
-    if (somedot == NULL) {
-      printf("[WARNING] Malloc did not work. Cannot create dot in packet receiving.\n");
-      return -1;
-    }
+      if (!dots[i]) {
+          /* malloc dot ONLY if not mallocated already before */
+          dots[i] = (dot *) malloc(sizeof(dot));
+          if (dots[i] == NULL) {
+              printf("[WARNING] Malloc did not work. Cannot create dot in packet receiving.\n");
+              return -1;
+          }
+      }
 
-    somedot->x = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + i*8]); /* 4 bytes */
-    somedot->y = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + i*8 + 4]); /* 4 bytes */
-
-    dots[i] = somedot;
+    dots[i]->x = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + i*8]); /* 4 bytes */
+    dots[i]->y = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + i*8 + 4]); /* 4 bytes */
   }
 
   /* print DOT DATA */
+  /*
   printf("\n=== DOTS === \n");
   for(i=0; i < n_dots; ++i) {
     if (i == n_dots - 1) printf("[%d, %d]\n", dots[i]->x, dots[i]->y);
     else printf("[%d, %d], ", dots[i]->x, dots[i]->y);
-  }
+  } */
 
   time_left = get_int_from_4bytes_lendian(&p[3 + total_client_len + 2 + n_dots*8]); /* 4 bytes */
   current_game->time_left = time_left;
@@ -535,7 +530,7 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
       *client_status = 8;
   }
 
-  printf("\n");
+  /* printf("\n"); */
 
   return 0;
 }
@@ -543,55 +538,17 @@ int process_packet_3(unsigned char* p, int* client_status, client_struct **clien
 int process_packet_4(unsigned char* p_dat, client_struct* client) {
   /* unsigned char g_id, p_id; */
   unsigned char byte3;
-  char w, a, s, d;
 
   char w_pos = 3, a_pos = 2, s_pos = 1, d_pos = 0; /* bitNumber, see get_bit */
   /* g_id = p_dat[0];
   p_id = p_dat[1]; */
   byte3 = p_dat[2];
-    w = (client->wasd[0] = get_bit(byte3, w_pos)); /* W pressed*/
-    a = (client->wasd[1] = get_bit(byte3, a_pos)); /* A pressed */
-    s = (client->wasd[2] = get_bit(byte3, s_pos)); /* S pressed */
-    d = (client->wasd[3] = get_bit(byte3, d_pos)); /* D pressed */
+  client->wasd[0] = get_bit(byte3, w_pos); /* W pressed*/
+  client->wasd[1] = get_bit(byte3, a_pos); /* A pressed */
+  client->wasd[2] = get_bit(byte3, s_pos); /* S pressed */
+  client->wasd[3] = get_bit(byte3, d_pos); /* D pressed */
 
-  /*
-  int *x = (int *) &client->x;
-  int *y = (int *) &client->y;
-
-  int min_x = BORDER_SIZE + getRadius(client) + 1;
-  int max_x = MAX_X - (BORDER_SIZE + getRadius(client));
-  int min_y = BORDER_SIZE + getRadius(client) + 1;
-  int max_y = MAX_Y - (BORDER_SIZE + getRadius(client));
-
-  if (w) {
-      if ((*y - SPEED*delta) > min_y)
-          *y -= SPEED*delta;
-      else
-          *y = min_y;
-  }
-
-    if (s) {
-        if ((*y + SPEED*delta) < max_y)
-            *y += SPEED*delta;
-        else
-            *y = max_y;
-    }
-
-    if (a) {
-        if ((*x - SPEED*delta) > min_x)
-            *x -= SPEED*delta;
-        else
-            *x = min_x;
-    }
-
-    if (d) {
-        if ((*x + SPEED*delta) < max_x)
-            *x += SPEED*delta;
-        else
-            *x = max_x;
-    }
-*/
-  printf("[REC PACKET 4] pressed(w,a,s,d)=(%d,%d,%d,%d), client=%d\n", w, a, s, d, client->ID);
+/*   printf("[REC PACKET 4] pressed(w,a,s,d)=(%d,%d,%d,%d), client=%d\n", w, a, s, d, client->ID); */
 
   return 0;
 }
@@ -768,11 +725,9 @@ int recv_byte (
     /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
   	if (receive > 0) { /* received byte */
       if (rec_byte[0] == 0) { /* divisor */
-        /* print_one_byte(rec_byte[0]); */
         receive = recv(socket, rec_byte, 1, 0);
         /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
         if (receive > 0) { /* received successfully */
-          /* print_one_byte(rec_byte[0]); */
           if (rec_byte[0] == 0) { /* new packet */
           } else {
             printf("[WARNING] Packet did not end with 00\n");
@@ -827,15 +782,15 @@ int recv_byte (
   }
 
   receive = recv(socket, rec_byte, 1, 0);
-  /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
 	if (receive > 0) { /* received byte */
-    if (rec_byte[0] == 0) { /* divisor */
+        /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
+
+        if (rec_byte[0] == 0) { /* divisor */
       /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
       receive = recv(socket, rec_byte, 1, 0);
-      /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
       if (receive > 0) { /* received successfully */
-        /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
-        if (rec_byte[0] == 0) { /* new packet */
+          /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
+          if (rec_byte[0] == 0) { /* new packet */
           if (*packet_status > 0) {/* previous packet should have been finished => error */
             printf("[WARNING] SHOULD NOT HAPPEN.\n");
             /* continue; */
@@ -861,15 +816,13 @@ int recv_byte (
 
       if (rec_byte[0] == 1) {
         receive = recv(socket, rec_byte, 1, 0);
-        /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
         if (receive > 0) { /* received successfully */
-          if (rec_byte[0] == 2) { /* new packet */
-              /* print_one_byte(0); */
+            /* printf("Receiving packet's element %d: %c (%d)\n", *packet_cursor, printable_char(rec_byte[0]), rec_byte[0]); */
+            if (rec_byte[0] == 2) { /* new packet */
               packet_in[*packet_cursor] = 0; /* 12 is escaped 0 */
               (*packet_cursor)++;
               /* continue; */
           } else if (rec_byte[0] == 3) {
-            /* print_one_byte(1); */
             packet_in[*packet_cursor] = 1; /* 13 is escaped 1 */
             (*packet_cursor)++;
             /* continue; */
@@ -882,7 +835,6 @@ int recv_byte (
           return -1;
         }
       } else {
-        /* print_one_byte(rec_byte[0]); */
         packet_in[*packet_cursor] = rec_byte[0];
         (*packet_cursor)++;
       }
@@ -891,8 +843,8 @@ int recv_byte (
   } else {
     if (client_status && (*client_status == 9 || *client_status == 10))
       return -1;
-    printf("[WARNING] Error recv. Smth.\n");
-    return -1;
+    /* printf("[WARNING] Error recv. Smth.\n"); */
+    /* return -1; */
   }
 
     return 1; /* success */

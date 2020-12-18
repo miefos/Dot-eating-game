@@ -1,4 +1,9 @@
 MIT License
+  for (i=0; i < MAX_DOTS; i++) {
+      if (dots[i])
+          dots[i] = NULL;
+  }
+
 
 Copyright (c) 2020 bitl-cs
 

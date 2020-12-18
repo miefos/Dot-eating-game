@@ -25,6 +25,8 @@ dot *dots[MAX_DOTS];
 game *current_game;
 
 int leave_flag = 0;
+unsigned int npk = 0; /* for packet 4 only */
+
 /* client status information... */
 /* 0 - initial */
 /* 1 - username set */
@@ -44,36 +46,6 @@ void set_leave_flag() {
     leave_flag = 1;
 }
 
-
-/* FROM Roberts */
-int playerInScreen(client_struct *myPlayer, client_struct* otherPlayer){
-    int viewWidth = 500;
-    int viewHeight = 500;
-    int otherPlayersRadius = getRadius(otherPlayer);
-
-    /* something weird happenning here.. just return 1 */
-
-    return 1;
-
-    if(myPlayer->x + viewWidth < otherPlayer->x - otherPlayersRadius){
-        printf("case1\n");
-        return 0;
-    }
-    if(myPlayer->x - viewWidth >= otherPlayer->x + otherPlayersRadius){
-        printf("case2\n");
-        return 0;
-    }
-    if(myPlayer->y - viewHeight >= otherPlayer->y + otherPlayersRadius){
-        printf("case3\n");
-        return 0;
-    }
-    if(myPlayer->y + viewHeight <= otherPlayer->y - otherPlayersRadius){
-        printf("case4\n");
-        return 0;
-    }
-    return 1;
-}
-
 void updateKeysPressed(unsigned char* keysPressed){
     if(IsKeyDown(KEY_UP) || IsKeyDown(KEY_W)){
         keysPressed[0] = '1';
@@ -88,12 +60,6 @@ void updateKeysPressed(unsigned char* keysPressed){
         keysPressed[3] = '1';
     }
 }
-
-float set_zoom_value(double size){
-    return 6 - size / 5;
-}
-
-/* END FROM ROBERTS*/
 
 void* send_loop(void* arg) {
 	int* client_socket = (int *) arg;
@@ -117,9 +83,9 @@ void* send_loop(void* arg) {
 
       /* sending packet 2 */
       unsigned char p[MAX_PACKET_SIZE];
-      int packet_size = _create_packet_2(p, current_game->g_id, client->ID, ready);
+      int p_size = _create_packet_2(p, current_game->g_id, client->ID, ready);
 
-      if (send_prepared_packet(p, packet_size, *client_socket) < 0) {
+      if (send_prepared_packet(p, p_size, *client_socket) < 0) {
         printf("[ERROR] Packet 2 could not be sent.\n");
       } else {
         printf("[OK] Packet 2 sent successfully.\n");
@@ -130,17 +96,10 @@ void* send_loop(void* arg) {
     else if (client_status == 8) {
       unsigned char p[MAX_PACKET_SIZE];
 
-      /* send 7th packet */
-      int p_size1 =  _create_packet_7(p, current_game->g_id, client->ID, "I decided to send you an update about my keypresses.");
-      if (send_prepared_packet(p, p_size1, *client_socket) < 0) {
-        printf("[ERROR] Packet 7 could not be sent.\n");
-      } else {
-        printf("[OK] Packet 7 sent successfully.\n");
-      }
-
       unsigned char wasd[4] = {0};
       updateKeysPressed(wasd);
-      int p_size = _create_packet_4(p, &current_game->g_id, &client->ID, wasd[0], wasd[1], wasd[2], wasd[3]);
+      int p_size = _create_packet_4(p, &current_game->g_id, &client->ID, wasd[0], wasd[1], wasd[2], wasd[3], npk);
+      npk++;
       if (send_prepared_packet(p, p_size, *client_socket) < 0) {
         printf("[ERROR] Packet 4 could not be sent.\n");
       } else {
@@ -228,6 +187,8 @@ int main(int argc, char **argv){
   }
   client->has_introduced = 0;
 
+
+
   /* malloc game */
     if ((current_game = (game*) malloc(sizeof(game))) == NULL) {
         printf("[ERROR] Cannot malloc game.\n");
@@ -271,7 +232,7 @@ int main(int argc, char **argv){
 */
   InitWindow(screenWidth, screenHeight, "Eating dots game");
 
-  SetTargetFPS(30);
+  SetTargetFPS(60);
 
   int letterCount = 0;
 
@@ -296,66 +257,6 @@ int main(int argc, char **argv){
 
       framesCounter++;
 
-      /* Get pressed key (character) on the queue */
-      int key = GetKeyPressed();
-
-      /* Check if more characters have been pressed on the same frame */
-      while (key > 0) {
-
-          /* if waiting for ready status and key pressed, make it ready */
-          if (client_status == 5) {
-            client_status = 6;
-          }
-
-          /* NOTE: Only allow keys in range [32..125] */
-          if ((key >= 32) && (key <= 125)) {
-              if (letterCount < MAX_USERNAME_CHARS && client_status == 0) {
-                  name[letterCount] = (char)key;
-                  letterCount++;
-              }
-              else if (letterCount < MAX_COLOR_CHARS && client_status == 1) {
-                  /* Check if entered is hex digit */
-                  char hexDigit = toupper((char) key);
-                  if ((hexDigit >= 48 && hexDigit <= 57) || (hexDigit >= 65 && hexDigit <= 70)) {
-                    /* is hex digit */
-                    color[letterCount] = toupper(hexDigit);
-                    letterCount++;
-                  } else {
-                    /* is not hex digit */
-                    /* shown only in console */
-                    printf("Entered bad hex digit.. :(\n");
-                  }
-              }
-          }
-
-          /* if key was pressed and waiting for keypress, set ready */
-          if (client_status == 5 && key > 0) {
-            client_status = 6;
-          }
-
-          key = GetKeyPressed();  /* Check next character in the queue */
-      }
-
-      if (IsKeyPressed(KEY_BACKSPACE)) {
-          letterCount--;
-          if (letterCount < 0) letterCount = 0;
-          if (client_status == 0) name[letterCount] = '\0';
-          else if (client_status == 1) color[letterCount] = '\0';
-      }
-
-      if (IsKeyPressed(KEY_ENTER)) {
-          if (client_status == 0) {
-              client_status = 1;
-              letterCount = 0;
-          } else if (client_status == 1 && letterCount == MAX_COLOR_CHARS) { /* only if color = 6 chars */
-              strcpy(client->username, name);
-              strcpy(client->color, color);
-              client_status = 2;
-              letterCount = 0;
-              /* sending 0th packet (in send loop), it sends because c_status = 2 */
-          }
-      }
-
       /* it is just some int that gets string's position from ending which fits in textbox... for GUI only */
       int showFromPosition = (letterCount - MAX_CHARS_IN_TEXTBOX > 0) ? letterCount - MAX_CHARS_IN_TEXTBOX : 0;
 
@@ -374,7 +275,65 @@ int main(int argc, char **argv){
         }
 
       /* draw according to client_status */
-          if (client_status == 0) {
+
+      /* until started game */
+      if (client_status < 7) {
+          /* Get pressed key (character) on the queue */
+          int key = GetKeyPressed();
+
+          /* Check if more characters have been pressed on the same frame */
+          while (key > 0) {
+              /* if waiting for ready status and key pressed, make it ready */
+              if (client_status == 5) client_status = 6;
+
+              /* NOTE: Only allow keys in range [32..125] */
+              if ((key >= 32) && (key <= 125)) {
+                  /* username */
+                  if (letterCount < MAX_USERNAME_CHARS && client_status == 0) {
+                      name[letterCount] = (char) key;
+                      letterCount++;
+                  /* color */
+                  } else if (letterCount < MAX_COLOR_CHARS && client_status == 1) {
+                      /* Check if entered is hex digit */
+                      char hexDigit = toupper((char) key);
+                      if ((hexDigit >= 48 && hexDigit <= 57) || (hexDigit >= 65 && hexDigit <= 70)) {
+                          /* is hex digit */
+                          color[letterCount] = toupper(hexDigit);
+                          letterCount++;
+                      } else {
+                          /* is not hex digit */
+                          /* shown only in console */
+                          printf("Entered bad hex digit.. :(\n");
+                      }
+                  }
+              }
+
+              key = GetKeyPressed();  /* Check next character in the queue */
+          }
+
+          if (IsKeyPressed(KEY_BACKSPACE)) {
+              letterCount--;
+              if (letterCount < 0) letterCount = 0;
+              if (client_status == 0) name[letterCount] = '\0';
+              else if (client_status == 1) color[letterCount] = '\0';
+          }
+
+          if (IsKeyPressed(KEY_ENTER)) {
+              if (client_status == 0 && letterCount > 0) {
+                  client_status = 1;
+              } else if (client_status == 1 && letterCount == MAX_COLOR_CHARS) { /* only if color = 6 chars */
+                  strcpy(client->username, name);
+                  strcpy(client->color, color);
+                  client_status = 2;
+                  /* sending 0th packet (in send loop), it sends because c_status = 2 */
+              }
+              letterCount = 0;
+          }
+
+          drawUnderscoreDelMessage(letterCount, client_status, textBox, name, color, font_size, showFromPosition, framesCounter);
+      }
+
+        if (client_status == 0) {
               DrawRectangleRec(textBox, LIGHTGRAY);
               DrawText(TextFormat("Please Enter Your Username"), text_box_x_pos, text_box_y_pos - font_size*1.5, font_size/2, DARKGRAY);
               DrawText(TextFormat("Input chars: %i/%i", letterCount, MAX_USERNAME_CHARS), text_box_x_pos, text_box_y_pos + 70, font_size/4, DARKGRAY);
@@ -415,36 +374,30 @@ int main(int argc, char **argv){
               int i;
               for(i = 0; i < current_game->clients_active; i++){
                   if (clients[i] && clients[i]->lives > 0) {
-                      if (playerInScreen(client, clients[i])) {
-                          /* Getting HEX colors to rgb format */
-                          int red, green, blue;
-                          sscanf((char *) clients[i]->color, "%02x%02x%02x", &red, &green, &blue);
-                          Color playerColor = {red, green, blue, 255};
-                          Vector2 playerPosition = {clients[i]->x, clients[i]->y};
+                      /* Getting HEX colors to rgb format */
+                      int red, green, blue;
+                      sscanf((char *) clients[i]->color, "%02x%02x%02x", &red, &green, &blue);
+                      Color playerColor = {red, green, blue, 255};
+                      Vector2 playerPosition = {clients[i]->x, clients[i]->y};
 
-                          /* current player*/
-                          if (clients[i]->ID == client->ID) {
-                              DrawText(TextFormat("Your current location: x=%.0f y=%.0f", clients[i]->x, clients[i]->y), 200 + BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING, font_size/2, DARKGRAY);
-                              DrawText(TextFormat("Lives: %i/%i", clients[i]->lives, current_game->max_lives), 200 + BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING + font_size/2, font_size/2, DARKGRAY);
-                          }
-
-                          DrawCircleV(playerPosition, getRadius(clients[i]), playerColor);
-                          /* printf("Circle position is x=%d y=%d, and radius is %f\n", clients[i]->x, clients[i]->y, getRadius(clients[i])); */
-
-                          /* int sizeLength = MeasureText(TextFormat("%04i", clients[i]->size), font_size/2);
-                          DrawText(TextFormat("%04i", clients[i]->size), clients[i]->x - sizeLength / 2, clients[i]->y + getRadius(clients[i]) / 2, font_size / 2, MAGENTA);
-                           */
-                          int usernameLength = MeasureText(clients[i]->username, font_size/2);
-                          DrawText(clients[i]->username,
-                                   clients[i]->x - usernameLength / 2,
-                                   clients[i]->y + getRadius(clients[i]), font_size/2, MAGENTA);
+                      /* current player*/
+                      if (clients[i]->ID == client->ID) {
+                          DrawText(TextFormat("Your current location: x=%.0f y=%.0f", clients[i]->x, clients[i]->y), 200 + BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING, font_size/2, DARKGRAY);
+                          DrawText(TextFormat("Lives: %i/%i", clients[i]->lives, current_game->max_lives), 200 + BORDER_SIZE + BASIC_TEXT_PADDING, BORDER_SIZE + BASIC_TEXT_PADDING + font_size/2, font_size/2, DARKGRAY);
                       }
+
+                      DrawCircleV(playerPosition, getRadius(clients[i]), playerColor);
+
+                      int usernameLength = MeasureText(clients[i]->username, font_size/2);
+                      DrawText(clients[i]->username,
+                               clients[i]->x - usernameLength / 2,
+                               clients[i]->y + getRadius(clients[i]), font_size/2, MAGENTA);
                   }
               }
 
               /* print dots */
               unsigned int dcount;
-              for (dcount = 0; dcount < MAX_DOTS; dcount++) {
+              for (dcount = 0; dcount < current_game->active_dots; dcount++) {
                   if (dots[dcount])
                     DrawCircle(dots[dcount]->x, dots[dcount]->y, CIRCLE_RADIUS, RED);
               }
@@ -453,16 +406,11 @@ int main(int argc, char **argv){
               /* DrawText(TextFormat("Game is running!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY); */
           }
           else if (client_status == 9) {
-              DrawText(TextFormat("Welcome %s!\nYour color is #%s", name, color), text_box_x_pos, text_box_y_pos, font_size, DARKGRAY);
               DrawText(TextFormat("You lost!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY);
           }
           else if (client_status == 10) {
-              DrawText(TextFormat("Welcome %s!\nYour color is #%s", name, color), text_box_x_pos, text_box_y_pos, font_size, DARKGRAY);
               DrawText(TextFormat("Game ended!"), text_box_x_pos, text_box_y_pos + 200, font_size/2, DARKGRAY);
           }
-
-          drawUnderscoreDelMessage(letterCount, client_status, textBox, name, color, font_size, showFromPosition, framesCounter);
-
 
       EndDrawing();
   }
